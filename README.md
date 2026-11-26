@@ -2,6 +2,10 @@
 
 A 3D browser science adventure covering the full **Cambridge IGCSE Co-ordinated Sciences (Double Award) 0654, 2025–2027** syllabus (a superset of Combined Science 0653): Biology, Chemistry and Physics, Core and Supplement.
 
+## Play it
+
+Live at **https://igcse-science.vercel.app**. Progress is saved in each player's own browser (localStorage), so every player keeps their own save.
+
 ## Run it
 
 ```bash
@@ -12,15 +16,15 @@ npm run build      # production build in dist/
 
 Requires Node 20.19+ or 22.12+ (for Vite 8) and a WebGL2 browser. Headphones recommended (all audio is synthesised).
 
-## Share it
+## Deploy
 
-The build uses relative paths, so `dist/` can be uploaded to any static host as it is.
+Vercel deploys the site from this repository on every push to `main`. `vercel.json` sets the build (`npm run build`, output `dist/`) and caches the hashed files in `dist/assets/` for a year. The build uses relative paths, so `dist/` also works as it is on any other static host.
 
 ```bash
 npm run build:artifact   # also writes dist/catalyst.html: the page as a body fragment for claude.ai Artifacts
 ```
 
-Publish `dist/catalyst.html` as the page with every file in `dist/assets/` alongside it at `assets/<name>`. Progress is saved in each player's own browser (localStorage), so every player keeps their own save.
+For a claude.ai Artifact, publish `dist/catalyst.html` as the page with every file in `dist/assets/` alongside it at `assets/<name>`.
 
 ## What's in it
 

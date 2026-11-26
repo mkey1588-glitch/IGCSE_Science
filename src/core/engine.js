@@ -130,8 +130,11 @@ export class Engine {
       tweens.update(dt);
       if (!this.view) return;
       this.view.update?.(dt, this.time);
-      this.composer.render(dt);
-      if (this.view.labels) this.view.labels.render(this.view.scene, this.view.camera);
+      // a window with no area (a hidden or not-yet-laid-out frame) has nothing to draw into; the resize event restores it
+      if (this.canvas.width && this.canvas.height) {
+        this.composer.render(dt);
+        if (this.view.labels) this.view.labels.render(this.view.scene, this.view.camera);
+      }
       this.onFrame?.(dt);
     }
   }

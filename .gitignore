@@ -1,8 +1,7 @@
 node_modules/
 dist/
 .vercel/
-.env
-.env.*
+.env*
 *.log
 .DS_Store
 .claude/settings.local.json
