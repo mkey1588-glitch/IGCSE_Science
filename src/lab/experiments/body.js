@@ -55,7 +55,7 @@ export default class Body extends Experiment {
       { q: 'After the sprint, breathing stayed fast even at rest. Why?', opts: ['Oxygen is needed to break down the lactic acid — the oxygen debt', 'The lungs were damaged', 'The body needed more carbon dioxide', 'The heart had stopped'], e: 'Lactic acid from anaerobic respiration is removed using extra oxygen.', o: [8, 9], sub: 'B12.1' },
       { q: 'Expired air turned limewater milky faster because it contains…', opts: ['more carbon dioxide', 'more oxygen', 'more nitrogen', 'less water vapour'], e: 'Respiration adds CO₂ (and water vapour) to the air you breathe out.', o: [2, 3], sub: 'B11.1' },
       { q: 'During the sprint, oxygen demand exceeded supply, so muscles also respired…', opts: ['anaerobically, making lactic acid', 'aerobically, making extra oxygen', 'by photosynthesis', 'without using glucose'], e: 'Anaerobic respiration releases less energy and produces lactic acid.', o: [5, 7], sub: 'B12.1' },
-    ], { sub: 'B9.2', onDone: () => { this.st.done(5); if ([0, 1, 2, 3, 4, 5].every((i) => this.st.isDone(i))) this.lab.goal('exercise'); } });
+    ], { sub: 'B9.2', onDone: () => { this.st.done(5); this.st.check(); } });
     this.hrHist = []; this.brHist = [];
     this.every((dt, t) => this.simExercise(dt, t));
     this.records = {};
@@ -150,7 +150,7 @@ export default class Body extends Experiment {
       { q: 'Why take the **mean** of several trials?', opts: ['To reduce the effect of random variation between trials', 'To make the reaction time shorter', 'Because the first trial is always wrong', 'To practise catching'], e: 'Averages are more reliable than single measurements.', o: [6], sub: 'B13.1' },
       { q: 'In a reflex arc, the relay neurone is found in the…', opts: ['spinal cord (central nervous system)', 'muscle', 'skin receptor', 'blood'], e: 'Receptor → sensory → relay (CNS) → motor → effector.', o: [4, 5], sub: 'B13.1' },
       { q: 'Which change is caused by **adrenaline**?', opts: ['Faster heart and breathing rate, wider pupils', 'Lower blood glucose', 'Slower heart rate', 'Smaller pupils'], e: 'Adrenaline prepares the body for fight or flight.', o: [3], sub: 'B13.2' },
-    ], { sub: 'B13.1', onDone: () => { this.st.done(4); if ([0, 1, 2, 3, 4].every((i) => this.st.isDone(i))) this.lab.goal('reaction'); } });
+    ], { sub: 'B13.1', onDone: () => { this.st.done(4); this.st.check(); } });
     this._key = (e) => { if (e.code === 'Space' && this.tab === 'reaction') { e.preventDefault(); this.catch(); } };
     window.addEventListener('keydown', this._key);
     this.onTabDispose(() => window.removeEventListener('keydown', this._key));

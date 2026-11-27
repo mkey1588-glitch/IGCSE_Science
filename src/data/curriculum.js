@@ -76,6 +76,18 @@ export function expandIds(ids, tier = 'extended') {
   return [...out];
 }
 
+/**
+ * Is this piece of work Supplement (Extended-tier) content? True when any of its objective ids
+ * is marked S in the syllabus data. Sub-topic ids alone carry no tier, so they count as Core.
+ */
+export function isSupplement(ids) {
+  return (ids || []).some((id) => OBJ[id]?.tier === 'S');
+}
+/** Is a whole activity (a lab tab, a model, a quest step) Supplement only? True when every objective it covers is S. */
+export function isSupplementOnly(ids) {
+  const objs = expandIds(ids, 'extended');
+  return objs.length > 0 && objs.every((id) => OBJ[id].tier === 'S');
+}
 /** Map an id (objective or sub-topic) to its sub-topic id. */
 export function subOf(id) { if (SUB[id]) return id; if (OBJ[id]) return OBJ[id].sub; return null; }
 export function subjectOf(id) { return id ? id[0] : null; }

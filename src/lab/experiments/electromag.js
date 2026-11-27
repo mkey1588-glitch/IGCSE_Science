@@ -37,7 +37,7 @@ export default class Electromag extends Experiment {
     this.tabViews = { magnets: v, electromagnet: v, motor: { pos: [0, 1.34, 0.78], target: [0, 1.04, 0] }, generator: { pos: [0, 1.34, 0.8], target: [0, 1.03, 0] }, transformer: { pos: [0, 1.32, 0.8], target: [0, 1.03, 0] } };
     this.view = v;
   }
-  checkTab(id, st, n) { if (Array.from({ length: n }, (_, i) => i).every((i) => st.isDone(i))) this.lab.goal(id); }
+  checkTab(id, st) { st.check(); }
 
   // ======================================================== magnets
   tab_magnets() {
@@ -51,7 +51,7 @@ export default class Electromag extends Experiment {
     const things = [['Iron nail', true, '#6b7280'], ['Steel paper clip', true, '#94a3b8'], ['Nickel coin', true, '#d1d5db'], ['Copper wire', false, '#c8743c'], ['Aluminium can', false, '#e5e7eb'], ['Plastic ruler', false, '#22c55e'], ['Wooden peg', false, '#b45309']];
     this.things = things;
     const ui = this.ui;
-    this.stM = ui.steps(['Show **attraction and repulsion** between two magnets', 'Sort materials into **magnetic and non-magnetic**', '(S) Read the **field direction** from the plotting compasses', 'Compare **soft iron and steel**: temporary or permanent?', 'Answer the analysis questions']);
+    this.stM = ui.steps(['Show **attraction and repulsion** between two magnets', 'Sort materials into **magnetic and non-magnetic**', { t: '(S) Read the **field direction** from the plotting compasses', o: ['P4.1.6'] }, 'Compare **soft iron and steel**: temporary or permanent?', 'Answer the analysis questions']);
     const sec = ui.section('Two bar magnets');
     ui.buttons([{ label: '🔄 Turn the right magnet round', onClick: () => this.flipM2() }, { label: '🤝 Push them together', kind: 'primary', onClick: () => this.pushTogether() }], sec);
     const ms = ui.section('Test materials with a magnet');
@@ -113,7 +113,7 @@ export default class Electromag extends Experiment {
     for (let i = 0; i < 14; i++) { const c = mesh(new THREE.TorusGeometry(0.006, 0.0012, 4, 12), M.steel); c.scale.y = 1.8; c.position.set((Math.random() - 0.5) * 0.08, 0.003, (Math.random() - 0.5) * 0.05); c.rotation.x = Math.PI / 2; this.clips.add(c); }
     this.ring = []; for (let i = 0; i < 8; i++) { const c = compass(); const a = (i / 8) * Math.PI * 2; this.lab.add(c, -0.05 + Math.cos(a) * 0.13, Y, Math.sin(a) * 0.09); this.ring.push(c); }
     const ui = this.ui;
-    this.stE = ui.steps(['Increase the **current** — how many clips?', 'Increase the **number of turns**', 'Take out the **iron core**', '(S) **Reverse** the current and watch the compasses', 'Answer the analysis questions']);
+    this.stE = ui.steps(['Increase the **current** — how many clips?', 'Increase the **number of turns**', 'Take out the **iron core**', { t: '(S) **Reverse** the current and watch the compasses', o: ['P4.5.3.2'] }, 'Answer the analysis questions']);
     const sec = ui.section('Electromagnet');
     ui.slider({ label: 'Current', min: 0, max: 3, step: 0.5, value: this.em.I, unit: 'A', parent: sec, onInput: (v) => { this.em.I = v; this.em.seenI.add(v); this.emUpdate(); } });
     ui.seg({ label: 'Turns of wire', options: [[20, '20'], [40, '40'], [80, '80']], value: 40, parent: sec, onChange: (v) => { this.em.N = +v; this.em.seenN.add(+v); this.rebuildCoil(); this.emUpdate(); } });

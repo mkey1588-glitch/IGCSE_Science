@@ -76,7 +76,7 @@ export function openCodex(ui, subId = null, tab = null) {
       if (!sel) {
         right.append(h('div', { class: 'eyebrow' }, SYLLABUS.name), h('h3', null, 'The Codex'),
           h('p', { class: 'summary' }, `Every one of the ${COUNTS.total} learning objectives (${COUNTS.core} Core and ${COUNTS.supplement} Supplement) lives here, grouped into ${COUNTS.subtopics} lessons. Pick a topic on the left to read the lesson, see where to learn it on the island, and explore how it connects to other ideas.`),
-          h('div', { class: 'life' }, '💡 ', h('b', null, 'Mastery dots: '), '● discovered (seen in a quest, scan or lesson) · ●● practised (completed an experiment or model) · ●●● mastered (answered questions correctly).'));
+          h('div', { class: 'life' }, '💡 ', h('b', null, 'Mastery dots: '), '● discovered (seen in a scan, quest, model or lab) · ●● practised (the experiment work for it, or one question answered right first time) · ●●● mastered (a second, different question right, or a right answer backed by the experiment work).'));
         right.append(h('div', { class: 'stat-grid', style: { marginTop: '16px' } }, ...['B', 'C', 'P'].map((s) => { const c = coverage(s); return h('div', { class: 'stat' }, h('div', { class: 'v', style: { color: SUBJECTS[s].color } }, `${c.seen}/${c.total}`), h('div', { class: 'l' }, `${SUBJECTS[s].name} objectives discovered`)); })));
         return;
       }
@@ -167,7 +167,7 @@ export function openCodex(ui, subId = null, tab = null) {
   // ---------------------------------------------------------------- practice
   const renderPractice = () => {
     const pane = h('div', { class: 'panel-body' }); body.append(pane);
-    pane.append(h('p', { class: 'muted', style: { lineHeight: 1.6 } }, 'Exam-style practice with instant feedback. Correct answers raise objectives to ●●● mastered. Calculation questions are freshly generated each time.'));
+    pane.append(h('p', { class: 'muted', style: { lineHeight: 1.6 } }, 'Exam-style practice with instant feedback. A right first answer counts as practice; a second, different question answered right masters the objective. Calculation questions are freshly generated each time.'));
     const weak = TOPICS.flatMap((t) => t.subs).filter((st) => subStats(st.id).any).sort((a, b) => subStats(a.id).frac - subStats(b.id).frac).slice(0, 5);
     if (weak.length) pane.append(h('div', { class: 'row', style: { margin: '8px 0 18px' } }, h('button', { class: 'btn primary', onClick: () => ui.quiz({ title: 'Review: your weakest topics', subs: weak.map((w) => w.id), n: 5 }) }, '🎯 Review my weakest topics'), h('span', { class: 'faint' }, weak.map((w) => w.id).join(' · '))));
     for (const s of ['B', 'C', 'P']) {

@@ -198,5 +198,5 @@ export default class Particles extends Experiment {
     this.nh3.instanceMatrix.needsUpdate = true; this.hcl.instanceMatrix.needsUpdate = true;
     this.nh3.visible = this.hcl.visible = this.running;
   }
-  checkTab(tab, n) { if ([...Array(n).keys()].every((i) => this.st.isDone(i))) this.lab.goal(tab); }
+  checkTab() { this.st.check(); }
 }

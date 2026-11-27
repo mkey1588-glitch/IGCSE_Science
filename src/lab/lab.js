@@ -7,7 +7,7 @@ import { canvasTex, roundRect, h, tweens, ease, disposeTree, mulberry32 } from '
 import { state, save, raise, addXP, checkAchievements } from '../core/state.js';
 import { bus } from '../core/events.js';
 import { audio } from '../core/audio.js';
-import { SUBJECTS } from '../data/curriculum.js';
+import { SUBJECTS, isSupplementOnly } from '../data/curriculum.js';
 import { game } from '../game.js';
 
 const BENCH_Y = 0.9;
@@ -126,6 +126,7 @@ export class LabView {
     if (!m || !loader) { game.ui.toast('🧪', `<b>${m?.title || id}</b> is still being built in this version.`); return false; }
     this.close(true);
     this.setRoom(m.kind);
+    this._sessionComplete = false;
     let mod;
     try { mod = await loader(); } catch (e) { console.error(e); game.ui.toast('⚠️', `Could not load ${m.title}.`); return false; }
     const Klass = mod.default;
@@ -136,7 +137,9 @@ export class LabView {
     if (!bag[id]) bag[id] = {};
     bag[id].unlocked = true; bag[id].opened = (bag[id].opened || 0) + 1;
     const questStep = opts.quest ? game.quests.stepOf(opts.quest) : null;
-    const tabs = m.tabs ? (this.active.tabLabels || m.tabs.map((t) => [t, t])) : null;
+    // a tab whose objectives are all Supplement is optional on the Core tier
+    this.optionalTabs = state.settings.tier === 'extended' ? [] : (m.tabs || []).filter((t) => isSupplementOnly(this.active.tabObjectives?.[t] || []));
+    const tabs = m.tabs ? (this.active.tabLabels || m.tabs.map((t) => [t, t])).map(([t, l]) => [t, this.optionalTabs.includes(t) ? `${l} · optional (S)` : l]) : null;
     const done = bag[id].goals || {};
     this.ui.mount(m, {
       onExit: () => game.closeLab(),
@@ -154,6 +157,7 @@ export class LabView {
     if (tabs && this.active.setTab) this.active.setTab(firstTab);
     this.frame((firstTab && this.active.tabViews?.[firstTab]) || this.active.view || null, true);
     audio.setMood('lab');
+    this.ui.focusStart();
     return true;
   }
 
@@ -212,22 +216,28 @@ export class LabView {
     bus.emit('exp:goal', m.id, name);
     if (m.tabs && m.tabs.includes(name)) {
       this.ui.markTab(name);
-      const subs = this.active?.tabObjectives?.[name];
-      if (subs) raise(subs, 2, 'lab');
+      // practical credit for what this tab's required analysis covers (or the tab's declared objectives)
+      const practised = this.ui.practiceIds.size ? [...this.ui.practiceIds] : this.active?.tabObjectives?.[name];
+      if (practised && m.kind !== 'holo') raise(practised, 2, 'lab');
       addXP(40, 'lab');
       game.ui.toast(m.icon, `<b>${m.title}</b> — “${(this.active?.tabLabels || []).find((t) => t[0] === name)?.[1] || name}” complete!`, 'good');
       audio.success();
-      if (m.tabs.every((t) => rec.goals[t])) this.complete();
+      if (m.tabs.every((t) => rec.goals[t] || this.optionalTabs?.includes(t))) this.complete();
     }
   }
 
+  /** Complete the open experiment or model. Runs once per visit, however many paths ask for it. */
   complete() {
-    const m = this.meta; if (!m) return;
+    const m = this.meta; if (!m || this._sessionComplete) return;
+    this._sessionComplete = true;
     const bag = m.kind === 'holo' ? state.holos : state.exps;
     const rec = (bag[m.id] = bag[m.id] || {}); rec.goals = rec.goals || {};
     const first = !rec.done;
     rec.done = true; rec.goals.complete = true;
-    raise(m.objectives, 2, 'lab');
+    // Credit what the work covered. A model is explored (seen); an experiment's practical work counts
+    // for the objectives its required analysis covers. Tabbed experiments credited each tab as it finished.
+    if (m.kind === 'holo') raise(m.objectives, 1, 'holo');
+    else if (!m.tabs) raise(this.ui.practiceIds.size ? [...this.ui.practiceIds] : m.objectives, 2, 'lab');
     if (first) { addXP(m.kind === 'holo' ? 50 : 80, 'lab'); state.stats.experiments++; }
     save();
     checkAchievements();
@@ -280,7 +290,7 @@ export class LabView {
       if (this.engine.view !== this || !this.active) return;
       setPointer(e); downAt = { x: e.clientX, y: e.clientY };
       const p = pick();
-      if (p?.it?.drag) {
+      if (p?.it?.drag && p.it.drag.enabled?.() !== false) {
         const o = p.it.obj; const wp = new THREE.Vector3(); o.getWorldPosition(wp);
         if (p.it.drag.axis === 'y') { const n = new THREE.Vector3(); this.camera.getWorldDirection(n); n.y = 0; n.normalize(); plane.setFromNormalAndCoplanarPoint(n, wp); }
         else plane.setFromNormalAndCoplanarPoint(new THREE.Vector3(0, 1, 0), wp);

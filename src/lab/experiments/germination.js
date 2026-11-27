@@ -99,6 +99,6 @@ export default class Germination extends Experiment {
       this.st.done(3); this.check();
     });
   }
-  check() { if ([0, 1, 2, 3, 4].every((i) => this.st.isDone(i))) this.lab.complete(); }
+  check() { this.st.check(); }
   update(dt) { this.vs.forEach((v) => v.v.update(dt)); }
 }

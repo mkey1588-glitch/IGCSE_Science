@@ -1,4 +1,5 @@
 import { QUESTS, QUEST } from '../data/quests.js';
+import { isSupplementOnly } from '../data/curriculum.js';
 import { NPC, POI, ZONE } from '../data/world.js';
 import { state, save, raise, addXP, checkAchievements, grant } from '../core/state.js';
 import { bus } from '../core/events.js';
@@ -86,10 +87,28 @@ export class QuestSystem {
     game.ui.updateQuestTracker();
   }
 
+  /** A step whose activity covers only Supplement objectives (its `o`, or the model's / experiment's own). */
+  supplementOnly(s) {
+    const ids = s.o || ((s.type === 'holo' || (s.type === 'exp' && !s.goal)) ? game.lab?.entry(s.id)?.objectives : null);
+    return !!ids && isSupplementOnly(ids);
+  }
+
+  /** On the Core tier, a step that asks only for Supplement work is optional: say so and move on. */
+  _skipIfOptional(id) {
+    const st = state.quests[id]; const s = st && QUEST[id].steps[st.step];
+    if (!s || state.settings.tier === 'extended' || !this.supplementOnly(s)) return false;
+    game.ui.toast('ℹ️', `Optional on the Core tier (Supplement): ${s.text.replace(/\*\*/g, '')} You can still try it from the Lab.`);
+    setTimeout(() => { if (state.quests[id]?.step === st.step) this.advance(id, true); }, 600);
+    return true;
+  }
+  /** After the tier changes, move past any current step that is now optional. */
+  reviewTier() { for (const q of QUESTS) if (state.quests[q.id]?.status === 'active') this._skipIfOptional(q.id); }
+
   _enterStep(id) {
     const st = state.quests[id]; const q = QUEST[id]; const s = q.steps[st.step];
     if (!s) return;
     if (s.type === 'exp' || s.type === 'holo') game.lab.unlock(s.id);
+    if (this._skipIfOptional(id)) return;
     // auto-complete steps the player already did
     const already = (s.type === 'scan' && state.scanned[s.poi]) ||
       (s.type === 'exp' && (state.exps[s.id]?.goals?.[s.goal || 'complete'])) ||
@@ -119,7 +138,7 @@ export class QuestSystem {
     state.quests[id].finished = Date.now();
     if (q.flag) state.flags[q.flag] = true;
     if (state.tracked === id) state.tracked = null;
-    raise(q.objectives, 2, 'quest');
+    // no blanket credit here: each step already credited the work it involved (scans, labs, answers)
     save();
     if (q.outro) await game.ui.dialogue(lines(q.outro));
     const before = this.availableCount();

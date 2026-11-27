@@ -121,22 +121,26 @@ export class ConstellationView {
       h('div', null, h('span', { style: { color: '#4b5a8a' } }, '━'), ' Dim line = both ideas discovered — practise both to spark'),
       h('div', { class: 'faint' }, 'Drag to orbit · scroll to zoom · click a star'));
     this.tip = h('div', { class: 'cs-tip glass hidden' });
-    this.ui.append(this.top, this.info, this.legend, this.tip);
+    // the way out sits in its own corner, so it stays visible however the other controls wrap
+    this.exit = h('button', { type: 'button', class: 'btn cs-exit', onClick: () => { audio.click(); game.closeConstellation(); } }, '↩ Back to island');
+    this.ui.append(this.top, this.info, this.legend, this.tip, this.exit);
     this._renderTop();
     this._renderInfo(null);
+    this.exit.focus({ preventScroll: true });
   }
   _renderTop() {
     if (!this.top) return;
+    const refocus = this.top.contains(document.activeElement) ? document.activeElement.dataset.ctl : null;
     clear(this.top);
-    const seg = h('div', { class: 'seg' });
-    for (const [v, l] of [['all', 'All'], ['cross', '✦ Cross-links'], ['B', '🧬 Biology'], ['C', '⚗️ Chemistry'], ['P', '⚛️ Physics']]) seg.append(h('span', { class: this.filter === v ? 'on' : '', onClick: () => { audio.click(); this.filter = v; this.refresh(); } }, l));
+    const seg = h('div', { class: 'seg', role: 'group', 'aria-label': 'Show' });
+    for (const [v, l] of [['all', 'All'], ['cross', '✦ Cross-links'], ['B', '🧬 Biology'], ['C', '⚗️ Chemistry'], ['P', '⚛️ Physics']]) seg.append(h('button', { type: 'button', class: this.filter === v ? 'on' : '', 'aria-pressed': String(this.filter === v), 'data-ctl': `filter-${v}`, onClick: () => { audio.click(); this.filter = v; this.refresh(); } }, l));
+    const reveal = h('button', { type: 'button', class: `switch ${this.reveal ? 'on' : ''}`, role: 'switch', 'aria-checked': String(!!this.reveal), 'aria-label': 'Show hidden links', 'data-ctl': 'reveal', onClick: () => { this.reveal = !this.reveal; this.refresh(); } });
     const all = coverage();
     this.top.append(
-      h('div', { class: 'glass row' }, h('div', { style: { fontSize: '20px' } }, '✨'), h('div', null, h('div', { style: { fontFamily: 'var(--display)', fontWeight: 700 } }, 'Constellation of Knowledge'), h('div', { class: 'faint', style: { fontSize: '.8em' } }, `${all.seen}/${all.total} objectives discovered · ${sparkedCount()}/${LINKS.length} connections sparked`))),
-      h('div', { class: 'glass' }, seg),
-      h('div', { class: 'glass row' }, h('span', { class: 'faint', style: { fontSize: '.85em' } }, 'Show hidden links'), (() => { const s = h('div', { class: `switch ${this.reveal ? 'on' : ''}` }); s.addEventListener('click', () => { this.reveal = !this.reveal; s.classList.toggle('on', this.reveal); this.refresh(); }); return s; })()),
-      h('div', { class: 'grow' }),
-      h('button', { class: 'btn', onClick: () => { audio.click(); game.closeConstellation(); } }, '↩ Back to island'));
+      h('div', { class: 'glass row cs-title' }, h('div', { style: { fontSize: '20px' }, 'aria-hidden': 'true' }, '✨'), h('div', null, h('div', { style: { fontFamily: 'var(--display)', fontWeight: 700 } }, 'Constellation of Knowledge'), h('div', { class: 'faint cs-stats', style: { fontSize: '.8em' } }, `${all.seen}/${all.total} objectives discovered · ${sparkedCount()}/${LINKS.length} connections sparked`))),
+      h('div', { class: 'glass cs-filters' }, seg),
+      h('div', { class: 'glass row cs-reveal' }, h('span', { class: 'faint', style: { fontSize: '.85em' }, 'aria-hidden': 'true' }, 'Show hidden links'), reveal));
+    if (refocus) this.top.querySelector(`[data-ctl="${refocus}"]`)?.focus({ preventScroll: true });
   }
   _renderInfo(id) {
     clear(this.info);

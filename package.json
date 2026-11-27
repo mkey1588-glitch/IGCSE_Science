@@ -8,12 +8,18 @@
     "dev": "vite",
     "build": "vite build",
     "build:artifact": "vite build && node tools/artifact-page.mjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:browser": "vite build && playwright test",
+    "test:all": "npm test && npm run test:browser"
   },
   "dependencies": {
     "three": "^0.187.0"
   },
   "devDependencies": {
-    "vite": "^8.3.8"
+    "@playwright/test": "1.65.0",
+    "happy-dom": "21.0.4",
+    "vite": "^8.3.8",
+    "vitest": "5.1.0"
   }
 }

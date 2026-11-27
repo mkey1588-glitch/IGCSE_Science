@@ -10,6 +10,19 @@ import { openCodex } from './codex.js';
 import { runQuiz } from './quiz.js';
 import { runChain } from './chain.js';
 
+const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+/** Keys pressed on these belong to the control (Enter/Space activate buttons, typing goes into fields). */
+export const isControl = (el) => !!el?.closest?.('button, a[href], input, select, textarea, [contenteditable=""], [contenteditable="true"], [role="button"], [role="radio"], [role="switch"]');
+/**
+ * Give focus back to where it was before an overlay opened. If that element is gone or hidden,
+ * use `fallback` (an element), else the 3D view, so the keyboard keeps working.
+ */
+export function restoreFocus(el, fallback = null) {
+  const usable = (x) => x && x !== document.body && x.isConnected && !x.closest('.hidden') && typeof x.focus === 'function';
+  const target = usable(el) ? el : usable(fallback) ? fallback : game.engine?.canvas;
+  target?.focus({ preventScroll: true });
+}
+
 export class UI {
   constructor(root) {
     this.root = root;
@@ -38,7 +51,7 @@ export class UI {
     mm.append(this.mmCanvas, this.mmZone);
     this.clock = h('div', { class: 'clock glass' });
     const right = h('div', { class: 'hud-right' }, mm, this.clock);
-    const hb = (ic, lb, k, fn, id) => h('div', { class: 'hb', title: `${lb} (${k})`, onClick: () => { audio.click(); fn(); }, id }, h('span', { class: 'ic' }, ic), h('span', { class: 'lb' }, lb), h('span', { class: 'k' }, k));
+    const hb = (ic, lb, k, fn, id) => h('button', { type: 'button', class: 'hb', title: `${lb} (${k})`, 'aria-label': lb, onClick: () => { audio.click(); fn(); }, id }, h('span', { class: 'ic', 'aria-hidden': 'true' }, ic), h('span', { class: 'lb' }, lb), h('span', { class: 'k', 'aria-hidden': 'true' }, k));
     this.hotbar = h('div', { class: 'hotbar glass' },
       hb('📜', 'Quests', 'J', () => this.openQuestLog()),
       hb('📚', 'Codex', 'C', () => this.openCodex()),
@@ -52,7 +65,8 @@ export class UI {
     this.hud.append(this.profile, this.quest, this.prompt, right, this.hotbar, this.help);
     setTimeout(() => this.help.classList.add('hidden'), 45000);
     window.addEventListener('keydown', (e) => {
-      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+      // letter shortcuts never fire while typing in a field or using a select
+      if (e.target?.closest?.('input, textarea, select, [contenteditable=""], [contenteditable="true"]')) return;
       if (game.mode !== 'world') return;
       if (e.code === 'Escape') { if (this.modalCount > 0) this.closeTopModal(); else if (!this.dialogOpen && !this.titleOpen) this.openSettings(); return; }
       if (this.isBlocking()) return;
@@ -79,35 +93,46 @@ export class UI {
     this.updateQuestTracker();
   }
 
+  /**
+   * The quest card. It is refreshed every second for the distance readout, so it only rebuilds when
+   * its contents change (otherwise just the distance text updates), and a rebuild puts keyboard focus
+   * back on the same control: a focused button never disappears from under the player.
+   */
   updateQuestTracker() {
     const q = game.quests?.tracked();
+    const step = q ? game.quests.stepOf(q.id) : null;
+    const tgt = step ? game.quests.currentTarget() : null;
+    const dist = tgt && game.world?.targetPos ? Math.round(game.world.targetPos.distanceTo(game.world.ppos)) : 0;
+    const travel = !!(tgt && tgt.zone && game.world?.currentZone !== tgt.zone && state.visited[tgt.zone]);
+    const sig = JSON.stringify([q?.id, q && state.quests[q.id]?.step, !!step, travel, q ? 0 : game.quests?.availableCount() || 0]);
+    const showDist = () => { if (this._qtDist) { this._qtDist.hidden = dist <= 5; this._qtDist.textContent = dist > 5 ? `◆ ${dist} m away — follow the golden beacon` : ''; } };
+    if (sig === this._qtSig && this.quest.firstChild) { showDist(); return; }
+    this._qtSig = sig;
+    const refocus = this.quest.contains(document.activeElement) ? document.activeElement.dataset.key : null;
     clear(this.quest);
+    this._qtDist = null;
     if (!q) {
       this.quest.classList.add('empty');
       const avail = game.quests?.availableCount() || 0;
       this.quest.append(h('div', { class: 'eyebrow' }, 'No active quest'), h('div', { style: { marginTop: '6px', lineHeight: 1.5 } }, avail ? `Look for residents with a golden ◆ marker — ${avail} quests are waiting.` : 'Explore Brightwater and scan the glowing ◈ points of interest.'),
-        h('div', { class: 'actions' }, h('button', { class: 'btn small', onClick: () => this.openQuestLog() }, '📜 Quest log')));
-      return;
-    }
-    this.quest.classList.remove('empty');
-    const step = game.quests.stepOf(q.id);
-    const zone = ZONE[q.zone];
-    this.quest.append(h('div', { class: 'eyebrow', style: { color: zone?.color } }, `${zone?.icon || ''} ${zone?.name || ''}${q.thread ? ' · ✦ Golden Thread' : ''}`),
-      h('div', { class: 'qt' }, q.title));
-    if (step) {
-      this.quest.append(h('div', { class: 'step' }, h('span', { class: 'dot' }), h('span', { html: rich(step.text) })));
-      const tgt = game.quests.currentTarget();
-      if (tgt && game.world?.targetPos) {
-        const d = Math.round(game.world.targetPos.distanceTo(game.world.ppos));
-        if (d > 5) this.quest.append(h('div', { class: 'dist' }, `◆ ${d} m away — follow the golden beacon`));
+        h('div', { class: 'actions' }, h('button', { class: 'btn small', 'data-key': 'log', onClick: () => this.openQuestLog() }, '📜 Quest log')));
+    } else {
+      this.quest.classList.remove('empty');
+      const zone = ZONE[q.zone];
+      this.quest.append(h('div', { class: 'eyebrow', style: { color: zone?.color } }, `${zone?.icon || ''} ${zone?.name || ''}${q.thread ? ' · ✦ Golden Thread' : ''}`),
+        h('div', { class: 'qt' }, q.title));
+      if (step) {
+        this.quest.append(h('div', { class: 'step' }, h('span', { class: 'dot' }), h('span', { html: rich(step.text) })));
+        this._qtDist = h('div', { class: 'dist' }); showDist();
+        const acts = h('div', { class: 'actions' });
+        const a = game.quests.stepAction(q.id);
+        if (a) acts.append(h('button', { class: 'btn small primary', 'data-key': 'action', onClick: () => { audio.click(); a.run(); } }, a.label));
+        if (travel) acts.append(h('button', { class: 'btn small', 'data-key': 'travel', onClick: () => this.fastTravel(tgt.zone) }, '⚡ Travel'));
+        acts.append(h('button', { class: 'btn small', 'data-key': 'details', onClick: () => this.openQuestLog(q.id) }, 'Details'));
+        this.quest.append(this._qtDist, acts);
       }
-      const acts = h('div', { class: 'actions' });
-      const a = game.quests.stepAction(q.id);
-      if (a) acts.append(h('button', { class: 'btn small primary', onClick: () => { audio.click(); a.run(); } }, a.label));
-      if (tgt && tgt.zone && game.world?.currentZone !== tgt.zone && state.visited[tgt.zone]) acts.append(h('button', { class: 'btn small', onClick: () => this.fastTravel(tgt.zone) }, '⚡ Travel'));
-      acts.append(h('button', { class: 'btn small', onClick: () => this.openQuestLog(q.id) }, 'Details'));
-      this.quest.append(acts);
     }
+    if (refocus) (this.quest.querySelector(`[data-key="${refocus}"]`) || this.quest.querySelector('button'))?.focus({ preventScroll: true });
   }
 
   setPrompt(t) {
@@ -274,7 +299,8 @@ export class UI {
   dialogue(lines, { choices = null, retry = true, tags = null } = {}) {
     return new Promise((resolve) => {
       this.dialogOpen = true;
-      const box = h('div', { class: 'dialogue glass' });
+      const returnFocus = document.activeElement;
+      const box = h('div', { class: 'dialogue glass', role: 'dialog', 'aria-label': 'Conversation' });
       this.layer.append(box);
       let i = 0, typing = null, full = '';
       const speakerOf = (who) => {
@@ -282,18 +308,20 @@ export class UI {
         if (who === 'narrator') return { name: 'Brightwater', role: '', emoji: '🏝️', color: '#0ea5e9' };
         const n = NPC[who]; return { name: n.name, role: n.role, emoji: n.emoji, color: ZONE[n.zone]?.color || '#8ea2ff' };
       };
-      const finish = (v) => { this.dialogOpen = false; box.remove(); game.world?.npcs && Object.values(game.world.npcs).forEach((n) => n.ch.setTalking(false)); resolve(v); };
+      const finish = (v) => { cleanup(); this.dialogOpen = false; box.remove(); game.world?.npcs && Object.values(game.world.npcs).forEach((n) => n.ch.setTalking(false)); restoreFocus(returnFocus); resolve(v); };
       const render = () => {
         const L = lines[i];
         const sp = speakerOf(L.who);
         const npc = game.world?.npcs?.[L.who];
         Object.values(game.world?.npcs || {}).forEach((n) => n.ch.setTalking(n === npc));
         clear(box);
-        const textEl = h('div', { class: `text ${L.who === 'you' ? 'player' : ''}` });
-        box.append(h('div', { class: 'portrait', style: { background: `linear-gradient(135deg, ${sp.color}, #1e293b)` } }, sp.emoji),
+        const textEl = h('div', { class: `text ${L.who === 'you' ? 'player' : ''}`, 'aria-live': 'polite' });
+        // a real button, so Tab/Enter/Space work; clicking anywhere on the box or pressing Space/Enter/E also advances
+        const next = i < lines.length - 1 || !choices ? h('button', { type: 'button', class: 'next', onClick: (e) => { e.stopPropagation(); advance(); } }, 'Continue ▸') : null;
+        box.append(h('div', { class: 'portrait', 'aria-hidden': 'true', style: { background: `linear-gradient(135deg, ${sp.color}, #1e293b)` } }, sp.emoji),
           h('div', { class: 'grow' }, h('div', { class: 'speaker' }, sp.name, h('span', { class: 'role' }, sp.role)), textEl,
-            tags && i === lines.length - 1 ? h('div', { class: 'tags' }, ...tags) : null,
-            h('div', { class: 'next' }, i < lines.length - 1 || !choices ? 'Click / Space ▸' : '')));
+            tags && i === lines.length - 1 ? h('div', { class: 'tags' }, ...tags) : null, next));
+        next?.focus({ preventScroll: true });
         full = L.text;
         let k = 0;
         clearInterval(typing);
@@ -304,10 +332,11 @@ export class UI {
         }, 16);
       };
       const showChoices = (parent) => {
-        const wrap = h('div', { class: 'choices' });
-        const fb = h('div', { class: 'feedback hidden' });
+        if (parent.querySelector('.choices')) return;
+        const wrap = h('div', { class: 'choices', role: 'group', 'aria-label': 'Your answer' });
+        const fb = h('div', { class: 'feedback hidden', role: 'status' });
         choices.forEach((c) => {
-          const b = h('button', { class: 'choice', onClick: () => {
+          const b = h('button', { type: 'button', class: 'choice', onClick: () => {
             audio.click();
             if (c.ok === false) {
               b.classList.add('wrong'); fb.classList.remove('hidden'); fb.innerHTML = '❌ ' + rich(c.fb || 'Not quite — think again.'); audio.fail();
@@ -320,45 +349,50 @@ export class UI {
           wrap.append(b);
         });
         parent.append(wrap, fb);
+        wrap.firstChild?.focus({ preventScroll: true });
       };
       const advance = () => {
         if (typing) { clearInterval(typing); typing = null; box.querySelector('.text').innerHTML = rich(full); if (i === lines.length - 1 && choices) showChoices(box.querySelector('.text').parentNode); return; }
         if (i === lines.length - 1 && choices) return;
         i++;
-        if (i >= lines.length) { cleanup(); finish(null); return; }
+        if (i >= lines.length) { finish(null); return; }
         render();
       };
-      const onKey = (e) => { if (['Space', 'Enter', 'KeyE'].includes(e.code)) { e.preventDefault(); advance(); } };
+      // Space/Enter/E advance the conversation, but only when no control has them: a focused button
+      // (a choice, Continue) keeps its own Enter/Space, and a window opened on top owns the keyboard.
+      const onKey = (e) => {
+        if (!['Space', 'Enter', 'KeyE'].includes(e.code) || isControl(e.target) || this.modalCount > 0) return;
+        e.preventDefault(); advance();
+      };
       const cleanup = () => window.removeEventListener('keydown', onKey);
-      box.addEventListener('click', (e) => { if (!e.target.closest('.choice')) advance(); });
+      box.addEventListener('click', (e) => { if (!e.target.closest('.choice, .next')) advance(); });
       window.addEventListener('keydown', onKey);
-      const origFinish = finish;
       render();
-      box._cleanup = cleanup;
-      // ensure listener removed on choice finish too
-      const obs = new MutationObserver(() => { if (!box.isConnected) { cleanup(); obs.disconnect(); } });
-      obs.observe(this.layer, { childList: true });
-      void origFinish;
     });
   }
 
   // ================================================================ modals
+  /** A window over the game. Focus moves into it and goes back to where it was when it closes. */
   modal({ title, body, cls = 'panel', onClose, head = null, wide }) {
     this.modalCount++;
+    const returnFocus = document.activeElement;
     const back = h('div', { class: 'modal-back' });
-    const close = () => { if (!back.isConnected) return; back.remove(); this.modalCount--; audio.close(); onClose?.(); };
-    const panel = h('div', { class: `${cls} glass` },
-      h('div', { class: 'panel-head' }, h('h2', null, title), h('div', { class: 'grow' }), head, h('button', { class: 'icon-btn', title: 'Close (Esc)', onClick: close }, '✕')),
+    const close = () => { if (!back.isConnected) return; back.remove(); this.modalCount--; audio.close(); onClose?.(); restoreFocus(returnFocus); };
+    const closeBtn = h('button', { type: 'button', class: 'icon-btn', title: 'Close (Esc)', 'aria-label': 'Close', onClick: close }, '✕');
+    const panel = h('div', { class: `${cls} glass`, role: 'dialog', 'aria-modal': 'true', 'aria-label': String(title).replace(/^\W+/u, '') },
+      h('div', { class: 'panel-head' }, h('h2', null, title), h('div', { class: 'grow' }), head, closeBtn),
       body);
     back.append(panel);
     back.addEventListener('pointerdown', (e) => { if (e.target === back) close(); });
     back._close = close;
     this.layer.append(back);
     audio.open();
+    (body?.querySelector?.(FOCUSABLE) || closeBtn).focus({ preventScroll: true });
     return { close, panel, back };
   }
   closeTopModal() { const all = this.layer.querySelectorAll('.modal-back'); const top = all[all.length - 1]; if (top) (top._close ? top._close() : top.remove()); }
-  closeAllModals() { this.layer.querySelectorAll('.modal-back').forEach((m) => (m._close ? m._close() : m.remove())); }
+  /** Close every window, top first, so focus ends up back where the first one was opened from. */
+  closeAllModals() { [...this.layer.querySelectorAll('.modal-back')].reverse().forEach((m) => (m._close ? m._close() : m.remove())); }
 
   // ---------------------------------------------------------------- scan card
   scan(poiId) {
@@ -418,7 +452,7 @@ export class UI {
       if (st === 'active') {
         acts.append(h('button', { class: 'btn primary', onClick: () => { state.tracked = q.id; save(); this.updateQuestTracker(); renderList(); } }, state.tracked === q.id ? '✓ Tracking' : '◆ Track this quest'));
         const a = Q.stepAction(q.id); if (a) acts.append(h('button', { class: 'btn', onClick: () => { this.closeTopModal(); a.run(); } }, a.label));
-      } else if (st === 'available') acts.append(h('div', { class: 'muted' }, `Talk to ${giver.name} in ${z.name} to begin.`), state.visited[q.zone] ? h('button', { class: 'btn small', onClick: () => { this.closeTopModal(); this.fastTravel(q.zone); } }, '⚡ Travel there') : null);
+      } else if (st === 'available') acts.append(...[h('div', { class: 'muted' }, `Talk to ${giver.name} in ${z.name} to begin.`), state.visited[q.zone] ? h('button', { class: 'btn small', onClick: () => { this.closeTopModal(); this.fastTravel(q.zone); } }, '⚡ Travel there') : null].filter(Boolean));
       else if (st === 'locked') acts.append(h('div', { class: 'muted' }, 'Complete earlier quests to unlock: ' + (q.requires || []).map((r) => Q.get(r)?.title).join(', ')));
       right.append(acts);
     };
@@ -428,8 +462,8 @@ export class UI {
         if (!list.length) continue;
         left.append(h('div', { class: 'eyebrow ql-group' }, `${name} · ${list.length}`));
         for (const q of list) {
-          left.append(h('div', { class: `ql-item ${q.id === sel ? 'on' : ''}`, onClick: () => { sel = q.id; renderList(); renderDetail(); } },
-            h('div', { class: 't' }, `${state.tracked === q.id ? '◆ ' : ''}${q.title}`), h('div', { class: 'z' }, `${ZONE[q.zone].icon} ${ZONE[q.zone].name}${q.thread ? ' · ✦' : ''}`)));
+          left.append(h('button', { type: 'button', class: `ql-item ${q.id === sel ? 'on' : ''}`, 'aria-pressed': String(q.id === sel), onClick: () => { sel = q.id; renderList(); renderDetail(); left.querySelector('.ql-item.on')?.focus(); } },
+            h('span', { class: 't' }, `${state.tracked === q.id ? '◆ ' : ''}${q.title}`), h('span', { class: 'z' }, `${ZONE[q.zone].icon} ${ZONE[q.zone].name}${q.thread ? ' · ✦' : ''}`)));
         }
       }
     };
@@ -450,13 +484,13 @@ export class UI {
       for (const e of list) {
         const unlocked = game.lab.isUnlocked(e.id);
         const done = state.exps[e.id]?.done || state.holos[e.id]?.done;
-        grid.append(h('div', { class: `cat-card ${unlocked ? '' : 'locked'}`, style: { '--c': SUBJECTS[s].color }, onClick: () => {
+        grid.append(h('button', { type: 'button', class: `cat-card ${unlocked ? '' : 'locked'}`, style: { '--c': SUBJECTS[s].color }, 'aria-label': `${e.title}${done ? ', completed' : ''}${unlocked ? '' : ', locked'}`, onClick: () => {
           if (!unlocked) { this.toast('🔒', `Unlock <b>${e.title}</b> through a quest, or enable Teacher mode in Settings.`); return; }
           this.closeTopModal(); game.openLab(e.id);
         } },
-          done ? h('div', { class: 'done' }, '✓') : null,
-          h('div', { class: 'ic' }, unlocked ? e.icon : '🔒'), h('h4', null, e.title), h('p', null, e.blurb),
-          h('div', { class: 'row wrap', style: { gap: '4px', marginTop: '8px' } }, ...e.objectives.slice(0, 4).map((id) => h('span', { class: `chip ${id[0]}` }, id)))));
+          done ? h('span', { class: 'done' }, '✓') : null,
+          h('span', { class: 'ic' }, unlocked ? e.icon : '🔒'), h('span', { class: 'h4' }, e.title), h('span', { class: 'p' }, e.blurb),
+          h('span', { class: 'row wrap', style: { gap: '4px', marginTop: '8px' } }, ...e.objectives.slice(0, 4).map((id) => h('span', { class: `chip ${id[0]}` }, id)))));
       }
       body.append(grid);
     }
@@ -466,19 +500,19 @@ export class UI {
   // ---------------------------------------------------------------- settings
   openSettings() {
     const S = state.settings;
-    const seg = (opts, val, fn) => { const el = h('div', { class: 'seg' }); opts.forEach(([v, l]) => el.append(h('span', { class: v === val ? 'on' : '', onClick: () => { fn(v); el.querySelectorAll('span').forEach((x) => x.classList.toggle('on', x.textContent === l)); } }, l))); return el; };
-    const sw = (val, fn) => { const el = h('div', { class: `switch ${val ? 'on' : ''}` }); el.addEventListener('click', () => { const v = !el.classList.contains('on'); el.classList.toggle('on', v); fn(v); }); return el; };
-    const range = (val, fn) => { const r = h('input', { type: 'range', min: 0, max: 1, step: 0.05, value: val, style: { width: '160px' } }); r.addEventListener('input', () => fn(+r.value)); return r; };
+    const seg = (opts, val, fn, label) => { const el = h('div', { class: 'seg', role: 'group', 'aria-label': label }); opts.forEach(([v, l]) => el.append(h('button', { type: 'button', class: v === val ? 'on' : '', 'aria-pressed': String(v === val), onClick: (e) => { fn(v); el.querySelectorAll('button').forEach((x) => { x.classList.toggle('on', x === e.currentTarget); x.setAttribute('aria-pressed', String(x === e.currentTarget)); }); } }, l))); return el; };
+    const sw = (val, fn, label) => { const el = h('button', { type: 'button', class: `switch ${val ? 'on' : ''}`, role: 'switch', 'aria-checked': String(!!val), 'aria-label': label }); el.addEventListener('click', () => { const v = !el.classList.contains('on'); el.classList.toggle('on', v); el.setAttribute('aria-checked', String(v)); fn(v); }); return el; };
+    const range = (val, fn, label) => { const r = h('input', { type: 'range', min: 0, max: 1, step: 0.05, value: val, style: { width: '160px' }, 'aria-label': label }); r.addEventListener('input', () => fn(+r.value)); return r; };
     const row = (l, d, ctl) => h('div', { class: 'set-row' }, h('div', null, h('div', { class: 'l' }, l), d ? h('div', { class: 'd' }, d) : null), ctl);
     const body = h('div', { class: 'panel-body' },
-      row('Syllabus tier', 'Core shows only Core objectives; Extended adds Supplement (S) content.', seg([['core', 'Core'], ['extended', 'Extended']], S.tier, (v) => { S.tier = v; save(); this.updateHUD(); game.world.refreshSky(); })),
-      row('Graphics quality', 'Lower this if the game feels slow.', seg([['low', 'Low'], ['medium', 'Medium'], ['high', 'High']], S.quality, (v) => { S.quality = v; save(); game.engine.setQuality(v); })),
-      row('Music & ambience', null, range(S.music, (v) => { S.music = v; audio.setVolumes({ music: v }); save(); })),
-      row('Sound effects', null, range(S.sfx, (v) => { S.sfx = v; audio.setVolumes({ sfx: v }); save(); })),
-      row('Day / night cycle', 'Night reveals the Constellation of Knowledge in the sky.', sw(S.cycle, (v) => { S.cycle = v; save(); })),
+      row('Syllabus tier', 'Core shows only Core objectives and makes Supplement (S) work optional; Extended adds Supplement content. Credit you earned stays with the work you did.', seg([['core', 'Core'], ['extended', 'Extended']], S.tier, (v) => { S.tier = v; save(); this.updateHUD(); game.world.refreshSky(); game.quests?.reviewTier(); }, 'Syllabus tier')),
+      row('Graphics quality', 'Lower this if the game feels slow.', seg([['low', 'Low'], ['medium', 'Medium'], ['high', 'High']], S.quality, (v) => { S.quality = v; save(); game.engine.setQuality(v); }, 'Graphics quality')),
+      row('Music & ambience', null, range(S.music, (v) => { S.music = v; audio.setVolumes({ music: v }); save(); }, 'Music and ambience volume')),
+      row('Sound effects', null, range(S.sfx, (v) => { S.sfx = v; audio.setVolumes({ sfx: v }); save(); }, 'Sound effects volume')),
+      row('Day / night cycle', 'Night reveals the Constellation of Knowledge in the sky.', sw(S.cycle, (v) => { S.cycle = v; save(); }, 'Day and night cycle')),
       row('Skip to night', 'See your constellation overhead right now.', h('button', { class: 'btn small', onClick: () => { state.time = 0.9; this.closeTopModal(); } }, '🌙 Night')),
-      row('Teacher / free-play mode', 'Unlocks every experiment, model and fast-travel point.', sw(S.teacher, (v) => { S.teacher = v; save(); })),
-      row('Text size', null, seg([[0.9, 'S'], [1, 'M'], [1.12, 'L']], S.textScale, (v) => { S.textScale = v; document.documentElement.style.setProperty('--ts', v); save(); })),
+      row('Teacher / free-play mode', 'Unlocks every experiment, model and fast-travel point.', sw(S.teacher, (v) => { S.teacher = v; save(); }, 'Teacher free-play mode')),
+      row('Text size', null, seg([[0.9, 'S'], [1, 'M'], [1.12, 'L']], S.textScale, (v) => { S.textScale = v; document.documentElement.style.setProperty('--ts', v); save(); }, 'Text size')),
       row('About this game', `${SYLLABUS.name} · ${SYLLABUS.years}`, h('button', { class: 'btn small', onClick: () => this.openAbout() }, 'ℹ️ About')),
       row('Return to title', 'Your progress is saved automatically.', h('button', { class: 'btn small', onClick: () => { save(); location.reload(); } }, '↩ Title screen')),
       // two-click confirm in the page itself (browser confirm() dialogs are blocked in embedded viewers)
@@ -496,7 +530,7 @@ export class UI {
       h('p', null, h('b', null, 'CATALYST — Mysteries of Brightwater Island'), ' is a 3D science adventure built around the ', h('b', null, `${SYLLABUS.name} (${SYLLABUS.years})`), '.'),
       h('p', { class: 'muted' }, `It maps all ${COUNTS.total} learning objectives (${COUNTS.core} Core, ${COUNTS.supplement} Supplement) across ${COUNTS.subtopics} sub-topics. ${SYLLABUS.note}`),
       h('p', null, 'Every quest is a real-life problem on the island. Investigate with ', h('b', null, 'field scans'), ', run ', h('b', null, 'virtual experiments'), ' in the Lumen Lab, explore ', h('b', null, '3D holo-models'), ', and solve ', h('b', null, 'cause-and-effect chains'), ' that link Biology, Chemistry and Physics. Each idea you learn becomes a star in the ', h('b', null, 'Constellation of Knowledge'), '; each connection you make draws a golden line between them.'),
-      h('p', { class: 'faint' }, 'Mastery levels: ● discovered → ●● practised (experiment or model) → ●●● mastered (questions answered correctly). Progress is stored only in this browser.'));
+      h('p', { class: 'faint' }, 'Mastery levels: ● discovered (seen in a scan, quest, model or lab) → ●● practised (the experiment work for it, or one question on it answered right first time) → ●●● mastered (a second, different question right, or a right answer backed by the experiment work). Progress is stored only in this browser.'));
     this.modal({ title: 'ℹ️ About CATALYST', body, cls: 'panel narrow' });
   }
 
@@ -505,8 +539,9 @@ export class UI {
     return new Promise((resolve) => {
       this.modalCount++;
       audio.complete();
-      const wrap = h('div', { class: 'big-reward' });
-      const close = () => { wrap.remove(); this.modalCount--; resolve(); };
+      const returnFocus = document.activeElement;
+      const wrap = h('div', { class: 'big-reward', role: 'dialog', 'aria-modal': 'true', 'aria-label': `Quest complete: ${title}` });
+      const close = () => { wrap.remove(); this.modalCount--; restoreFocus(returnFocus); resolve(); };
       wrap.append(h('div', { class: 'card glass' },
         h('div', { class: 'star' }, icon),
         h('div', { class: 'eyebrow', style: { marginTop: '10px' } }, 'Quest complete'),
@@ -517,6 +552,7 @@ export class UI {
         h('div', { style: { fontFamily: 'var(--display)', fontSize: '1.4em', color: 'var(--gold)', margin: '10px 0 16px' } }, `+${xp} XP`),
         h('button', { class: 'btn primary', onClick: close }, 'Continue')));
       this.layer.append(wrap);
+      wrap.querySelector('.btn.primary').focus({ preventScroll: true });
     });
   }
 
@@ -542,16 +578,22 @@ export class UI {
         h('span', { class: 'chip gold' }, `${COUNTS.total} learning objectives`), h('span', { class: 'chip' }, 'IGCSE 0654')),
       h('div', { class: 'foot' }, 'Best with headphones · Mouse & keyboard or touch'));
     this.layer.append(t);
+    t.querySelector('.menu button')?.focus({ preventScroll: true });
   }
 
   _newGameDialog(titleEl, onNew) {
     let tier = 'extended';
-    const name = h('input', { type: 'text', placeholder: 'Your scientist name', maxlength: 18, value: '' });
-    const opt = (v, t, d) => { const el = h('div', { class: `tier-opt ${v === tier ? 'on' : ''}`, onClick: () => { tier = v; el.parentNode.querySelectorAll('.tier-opt').forEach((x) => x.classList.remove('on')); el.classList.add('on'); } }, h('h4', null, t), h('p', null, d)); return el; };
+    const name = h('input', { type: 'text', placeholder: 'Your scientist name', maxlength: 18, value: '', 'aria-label': 'Your scientist name' });
+    // a native radio group: Tab reaches it, arrow keys or Space choose, and the chosen card is highlighted
+    const opt = (v, t, d) => {
+      const input = h('input', { type: 'radio', name: 'tier', value: v, class: 'sr-only', checked: v === tier ? true : null, 'aria-describedby': `tier-${v}-d` });
+      input.addEventListener('change', () => { if (!input.checked) return; tier = v; input.closest('.tier-opts').querySelectorAll('.tier-opt').forEach((x) => x.classList.toggle('on', x.contains(input))); });
+      return h('label', { class: `tier-opt ${v === tier ? 'on' : ''}` }, input, h('span', { class: 'h4' }, t), h('span', { class: 'p', id: `tier-${v}-d` }, d));
+    };
     const body = h('div', { class: 'panel-body' },
       h('div', { class: 'eyebrow' }, 'Who are you?'), h('div', { style: { margin: '8px 0 18px' } }, name),
-      h('div', { class: 'eyebrow' }, 'Choose your syllabus tier'),
-      h('div', { class: 'tier-opts' }, opt('core', 'Core', `${COUNTS.core} Core objectives. Supplement content is shown as optional extras.`), opt('extended', 'Extended', `All ${COUNTS.total} objectives — Core plus Supplement (S). Recommended for A*–C.`)),
+      h('div', { class: 'eyebrow', id: 'tier-label' }, 'Choose your syllabus tier'),
+      h('div', { class: 'tier-opts', role: 'radiogroup', 'aria-labelledby': 'tier-label' }, opt('core', 'Core', `${COUNTS.core} Core objectives. Supplement content is shown as optional extras.`), opt('extended', 'Extended', `All ${COUNTS.total} objectives — Core plus Supplement (S). Recommended for A*–C.`)),
       h('p', { class: 'faint', style: { fontSize: '.85em' } }, 'You can change this any time in Settings.'),
       h('div', { class: 'row', style: { marginTop: '16px' } }, h('div', { class: 'grow' }), h('button', { class: 'btn primary', onClick: () => {
         const nm = name.value.trim() || 'Sam';
@@ -565,12 +607,15 @@ export class UI {
   story(paragraphs) {
     return new Promise((resolve) => {
       this.modalCount++;
+      const returnFocus = document.activeElement;
       const wrap = h('div', { class: 'modal-back', style: { background: 'rgba(3,5,12,.72)' } });
-      const close = () => { if (!wrap.isConnected) return; wrap.remove(); this.modalCount--; resolve(); };
+      const close = () => { if (!wrap.isConnected) return; wrap.remove(); this.modalCount--; restoreFocus(returnFocus); resolve(); };
       wrap._close = close;
-      wrap.append(h('div', { class: 'story glass' }, h('div', { class: 'eyebrow' }, 'Prologue'), ...paragraphs.map((p) => h('p', { html: rich(p) })),
-        h('div', { class: 'row' }, h('div', { class: 'grow' }), h('button', { class: 'btn primary', onClick: close }, 'Step onto the island ▸'))));
+      const go = h('button', { class: 'btn primary', onClick: close }, 'Step onto the island ▸');
+      wrap.append(h('div', { class: 'story glass', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Prologue' }, h('div', { class: 'eyebrow' }, 'Prologue'), ...paragraphs.map((p) => h('p', { html: rich(p) })),
+        h('div', { class: 'row' }, h('div', { class: 'grow' }), go)));
       this.layer.append(wrap);
+      go.focus({ preventScroll: true });
     });
   }
 }

@@ -28,7 +28,7 @@ export default class Thermal extends Experiment {
     this.tabViews = { conduction: { pos: [0, 1.4, 0.85], target: [0, 0.96, 0] }, convection: { pos: [0, 1.36, 0.8], target: [0, 1.1, 0] }, radiation: { pos: [0, 1.38, 0.95], target: [0, 1.02, 0] }, expansion: { pos: [0, 1.38, 0.92], target: [0, 1.06, 0] } };
     this.view = this.tabViews.conduction;
   }
-  checkTab(id, st, n) { if (Array.from({ length: n }, (_, i) => i).every((i) => st.isDone(i))) this.lab.goal(id); }
+  checkTab(id, st) { st.check(); }
 
   // ======================================================== conduction
   tab_conduction() {

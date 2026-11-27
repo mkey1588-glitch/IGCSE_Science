@@ -1,7 +1,7 @@
 import { h, clear, rich, shuffle } from '../core/util.js';
 import { audio } from '../core/audio.js';
-import { state, recordAnswer, raise } from '../core/state.js';
-import { questionsFor } from '../data/questions.js';
+import { state, recordAnswer } from '../core/state.js';
+import { questionsFor, objectivesOf } from '../data/questions.js';
 import { SUB } from '../data/curriculum.js';
 
 /**
@@ -22,19 +22,21 @@ export function runQuiz(ui, { title = 'Challenge', subs, n = 3, pass = null, int
       const q = qs[i];
       const prog = h('div', { class: 'prog' }, ...qs.map((_, k) => h('i', { class: k < i ? (results[k] ? 'ok' : 'no') : k === i ? 'cur' : '' })));
       const st = SUB[q.t];
-      card.append(prog, h('div', { class: 'row', style: { marginTop: '14px', gap: '6px' } }, h('span', { class: `chip ${q.t[0]}` }, `${q.t} ${st?.title || ''}`), q.s ? h('span', { class: 'chip S' }, 'Supplement') : null, q.gen ? h('span', { class: 'chip' }, '🔢 calculation') : null),
+      // (append() would print a null child as the text "null", so optional parts are filtered first)
+      card.append(...[prog, h('div', { class: 'row', style: { marginTop: '14px', gap: '6px' } }, h('span', { class: `chip ${q.t[0]}` }, `${q.t} ${st?.title || ''}`), q.s ? h('span', { class: 'chip S' }, 'Supplement') : null, q.gen ? h('span', { class: 'chip' }, '🔢 calculation') : null),
         intro && i === 0 ? h('div', { class: 'muted', style: { marginTop: '10px' }, html: rich(intro) }) : null,
-        h('div', { class: 'q', html: rich(q.q) }));
+        h('div', { class: 'q', html: rich(q.q) })].filter(Boolean));
       const expl = h('div', { class: 'expl hidden' });
       const next = h('button', { class: 'btn primary hidden', style: { marginTop: '14px' }, onClick: () => { i++; if (i >= qs.length) finish(); else render(); } }, i === qs.length - 1 ? 'See results ▸' : 'Next question ▸');
       const answered = (ok, shown) => {
         results[i] = ok; if (ok) correct++;
-        recordAnswer(ok, q.o && q.o.length ? q.o.map((k) => `${q.t}.${k}`) : [q.t]);
-        if (!ok) raise([q.t], 1, 'quiz');
+        const ids = objectivesOf(q);
+        recordAnswer(ok, ids.length ? ids : [q.t], { key: q.id, source: 'quiz' });
         ok ? audio.success() : audio.fail();
         expl.classList.remove('hidden');
         expl.innerHTML = (ok ? '✅ <b>Correct.</b> ' : `❌ <b>Not quite.</b> ${shown ? `The answer is <b>${shown}</b>. ` : ''}`) + rich(q.e || '');
         next.classList.remove('hidden');
+        next.focus();
       };
       if (q.o_ && q.opts) {
         // (unused branch kept for clarity)
@@ -53,6 +55,7 @@ export function runQuiz(ui, { title = 'Challenge', subs, n = 3, pass = null, int
           box.append(b);
         });
         card.append(box);
+        queueMicrotask(() => box.firstChild?.focus({ preventScroll: true })); // keyboard: start on the first option
       } else {
         const inp = h('input', { type: 'text', placeholder: 'Your answer', inputmode: 'decimal' });
         const go = h('button', { class: 'btn primary', onClick: () => submit() }, 'Check');
@@ -77,8 +80,9 @@ export function runQuiz(ui, { title = 'Challenge', subs, n = 3, pass = null, int
       card.append(h('div', { style: { textAlign: 'center' } },
         h('div', { style: { fontSize: '48px' } }, passed ? '🏅' : '📘'),
         h('h2', { style: { margin: '8px 0' } }, `${correct} / ${qs.length} correct`),
-        h('p', { class: 'muted' }, passed ? 'Great work — those objectives are now marked as mastered.' : `You need ${need} to pass. Review the lesson and try again — new questions are drawn each time.`),
+        h('p', { class: 'muted' }, passed ? 'Great work. Each correct first answer is saved as evidence: an objective is mastered once a second, different question or your lab work backs it up.' : `You need ${need} to pass. Review the lesson and try again — new questions are drawn each time.`),
         h('button', { class: 'btn primary', style: { marginTop: '10px' }, onClick: () => m.close() }, passed ? 'Continue' : 'Close')));
+      card.querySelector('.btn.primary').focus();
     };
     render();
   });

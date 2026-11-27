@@ -5,6 +5,7 @@ import { canvasTex, clamp, tweens } from '../../core/util.js';
 import { audio } from '../../core/audio.js';
 
 const CO2 = { 0: 'none', 0.5: 'low', 1: 'medium', 2: 'high' };
+const GRAPH_T = 25; // °C: the light/CO₂ graph only compares counts made at this temperature
 const tFactor = (T) => (T >= 45 ? 0.08 : T <= 30 ? Math.exp(-(((T - 30) / 14) ** 2)) : Math.exp(-(((T - 30) / 8) ** 2)));
 
 export default class Photosynthesis extends Experiment {
@@ -12,12 +13,13 @@ export default class Photosynthesis extends Experiment {
     super(...a);
     this.scenario = 'Ravi’s greenhouse tomatoes are pale and slow. Pondweed gives off bubbles of oxygen as it photosynthesises — use them to find what limits growth.';
     this.view = { pos: [0.02, 1.52, 1.28], target: [0.02, 1.0, 0] };
-    this.d = 15; this.C = 1; this.T = 25; this.distances = new Set(); this.co2s = new Set(); this.counting = false;
+    this.d = 15; this.C = 1; this.T = 25; this.distances = new Set(); this.co2ByT = {}; this.counting = null;
   }
-  rate() {
-    const L = (10 / this.d) ** 2;
-    const lightLim = 70 * L, co2Lim = 8 + 40 * this.C;
-    return { r: tFactor(this.T) * Math.min(lightLim, co2Lim), limit: tFactor(this.T) < 0.55 ? 'temperature' : lightLim < co2Lim ? 'light intensity' : 'CO₂ concentration', L };
+  /** Bubble rate for a set of conditions (defaults to the current control settings). */
+  rate({ d = this.d, C = this.C, T = this.T } = {}) {
+    const L = (10 / d) ** 2;
+    const lightLim = 70 * L, co2Lim = 8 + 40 * C;
+    return { r: tFactor(T) * Math.min(lightLim, co2Lim), limit: tFactor(T) < 0.55 ? 'temperature' : lightLim < co2Lim ? 'light intensity' : 'CO₂ concentration', L };
   }
   build() {
     const Y = this.Y;
@@ -34,7 +36,7 @@ export default class Photosynthesis extends Experiment {
     this.bub.position.y = 0;
     this.th = new Thermometer(0.2); this.lab.add(this.th, -0.045, Y + 0.01, 0.02); this.th.rotation.z = -0.15;
     this.lamp = new Lamp(); this.lamp.rotation.y = -Math.PI / 2; this.lab.add(this.lamp, -this.d * 0.008 - 0.02, Y, 0);
-    this.lab.draggable(this.lamp, { axis: 'x', min: -0.42, max: -0.1, tip: 'Drag the lamp closer or further away', onMove: (p) => { this.d = clamp(Math.round((-p.x - 0.02) / 0.008), 10, 50); this.dS.set(this.d); this.applyLight(); } });
+    this.lab.draggable(this.lamp, { axis: 'x', min: -0.42, max: -0.1, tip: 'Drag the lamp closer or further away', enabled: () => !this.counting, onMove: (p) => { this.d = clamp(Math.round((-p.x - 0.02) / 0.008), 10, 50); this.dS.set(this.d); this.applyLight(); } });
     this.lab.label(this.lamp, 'Lamp (drag me)', { y: 0.3 });
     // indicator tubes
     this.ind = [['Light', 'light'], ['Dark', 'dark'], ['No plant', 'control']].map(([name, kind], i) => {
@@ -55,14 +57,15 @@ export default class Photosynthesis extends Experiment {
     const ui = this.ui;
     this.st = ui.steps(['Count bubbles with the lamp **close** to the pondweed', 'Count at **four or more** lamp distances', 'Change the **CO₂** (sodium hydrogencarbonate) and repeat close up', 'Run the **hydrogencarbonate indicator** test', 'Do the **leaf starch** test', 'Answer the analysis questions']);
     const sec = ui.section('Limiting factors');
+    // changes made while a count runs apply to the next count; the controls are locked meanwhile
     this.dS = ui.slider({ label: 'Lamp distance', min: 10, max: 50, step: 1, value: this.d, unit: 'cm', parent: sec, onInput: (v) => { this.d = v; this.lamp.position.x = -v * 0.008 - 0.02; this.applyLight(); } });
-    ui.seg({ label: 'CO₂ (sodium hydrogencarbonate)', options: [[0, 'None'], [0.5, 'Low'], [1, 'Medium'], [2, 'High']], value: 1, parent: sec, onChange: (v) => { this.C = +v; } });
-    ui.slider({ label: 'Water temperature', min: 10, max: 45, step: 5, value: this.T, unit: '°C', parent: sec, onInput: (v) => { this.T = v; this.th.set(v); } });
-    ui.buttons([{ label: '⏱ Count bubbles for 1 minute', kind: 'primary', onClick: () => this.count() }], sec);
+    this.co2Seg = ui.seg({ label: 'CO₂ (sodium hydrogencarbonate)', options: [[0, 'None'], [0.5, 'Low'], [1, 'Medium'], [2, 'High']], value: 1, parent: sec, onChange: (v) => { this.C = +v; } });
+    this.tS = ui.slider({ label: 'Water temperature', min: 10, max: 45, step: 5, value: this.T, unit: '°C', parent: sec, onInput: (v) => { this.T = v; this.th.set(v); } });
+    [this.countBtn] = ui.buttons([{ label: '⏱ Count bubbles for 1 minute', kind: 'primary', onClick: () => this.count() }], sec);
     this.ro = ui.readouts([{ id: 'L', label: 'Light (rel.)' }, { id: 'r', label: 'Bubbles/min' }, { id: 'lim', label: 'Limiting' }], sec);
     const res = ui.section('Results');
     this.tbl = ui.table(['d /cm', 'Light 1/d²', 'CO₂', 'T °C', 'Bubbles/min'], res);
-    this.graph = ui.graph({ x: { label: 'Light intensity (relative, 1/d²)', min: 0, max: 1.05 }, y: { label: 'Bubbles per minute', min: 0, max: 80 }, series: [{ name: 'none', color: '#94a3b8', line: true }, { name: 'low', color: '#60a5fa', line: true }, { name: 'medium', color: '#4ade80', line: true }, { name: 'high', color: '#facc15', line: true }] }, res);
+    this.graph = ui.graph({ x: { label: 'Light intensity (relative, 1/d²)', min: 0, max: 1.05 }, y: { label: `Bubbles per minute at ${GRAPH_T} °C`, min: 0, max: 80 }, series: [{ name: 'none', color: '#94a3b8', line: true }, { name: 'low', color: '#60a5fa', line: true }, { name: 'medium', color: '#4ade80', line: true }, { name: 'high', color: '#facc15', line: true }] }, res);
     const other = ui.section('Gas exchange & starch');
     ui.buttons([{ label: '🧪 Leave indicator tubes 1 hour', onClick: () => this.runIndicator() }, { label: '🍃 Test leaves for starch', onClick: () => this.leafTest() }], other);
     ui.text('Hydrogencarbonate indicator: **yellow** = more CO₂, **red** = normal, **purple** = less CO₂.', other);
@@ -77,26 +80,33 @@ export default class Photosynthesis extends Experiment {
     this.applyLight();
   }
   applyLight() { const L = (10 / this.d) ** 2; this.lamp.set(clamp(0.3 + L * 0.7, 0.3, 1.0)); }
+  lockControls(on) { this.dS.disable(on); this.co2Seg.disable(on); this.tS.disable(on); this.countBtn.disabled = on; }
+  /** One trial: its conditions are fixed when the count starts, and its row, plot point and steps use them. */
   count() {
     if (this.counting) return;
-    this.counting = true;
-    const { r, limit, L } = this.rate();
-    const n = Math.max(0, Math.round(r + (Math.random() - 0.5) * 2));
+    const trial = { d: this.d, C: this.C, T: this.T };
+    Object.assign(trial, this.rate(trial));
+    this.counting = trial;
+    this.lockControls(true);
+    const n = Math.max(0, Math.round(trial.r + (Math.random() - 0.5) * 2));
     let shown = 0;
-    this.ui.hint('⏱ Counting bubbles for one minute…');
+    this.ui.hint(`⏱ Counting bubbles for one minute at ${trial.d} cm, ${CO2[trial.C]} CO₂, ${trial.T} °C…`);
     tweens.tween(5, (e) => { const k = Math.floor(n * e); if (k > shown) { shown = k; this.ro.set('r', k); } }).promise.then(() => {
-      this.counting = false; this.ui.hint('');
+      if (this.counting !== trial) return; // the experiment was reset or closed meanwhile
+      this.counting = null; this.lockControls(false); this.ui.hint('');
       this.ro.set('r', n);
-      this.tbl.add([this.d, L.toFixed(3), CO2[this.C], this.T, n]);
-      this.graph.add({ 0: 0, 0.5: 1, 1: 2, 2: 3 }[this.C], L, n);
-      this.graph.series.forEach((s) => s.data.sort((a, b) => a[0] - b[0])); this.graph.draw();
-      this.ui.note(`d = ${this.d} cm, CO₂ ${CO2[this.C]}, ${this.T} °C → **${n} bubbles/min** (limited by ${limit}).`);
-      if (this.d <= 12) this.st.done(0);
-      if (this.C === 1 && this.T === 25) this.distances.add(this.d);
+      this.tbl.add([trial.d, trial.L.toFixed(3), CO2[trial.C], trial.T, n]);
+      // the graph compares counts under matching conditions: one line per CO₂ level, all at the same temperature
+      if (trial.T === GRAPH_T) {
+        this.graph.add({ 0: 0, 0.5: 1, 1: 2, 2: 3 }[trial.C], trial.L, n);
+        this.graph.series.forEach((s) => s.data.sort((a, b) => a[0] - b[0])); this.graph.draw();
+      }
+      this.ui.note(`d = ${trial.d} cm, CO₂ ${CO2[trial.C]}, ${trial.T} °C → **${n} bubbles/min** (limited by ${trial.limit}).${trial.T === GRAPH_T ? '' : ` Not plotted: the graph compares counts at ${GRAPH_T} °C.`}`);
+      if (trial.d <= 12) this.st.done(0);
+      if (trial.C === 1 && trial.T === GRAPH_T) this.distances.add(trial.d);
       if (this.distances.size >= 4) this.st.done(1);
-      if (this.d <= 12) this.co2s.add(this.C);
-      if (this.co2s.size >= 2) this.st.done(2);
-      this.check();
+      if (trial.d <= 12) (this.co2ByT[trial.T] ||= new Set()).add(trial.C); // CO₂ levels compared close up, at one temperature
+      if (Object.values(this.co2ByT).some((s) => s.size >= 2)) this.st.done(2);
     });
   }
   runIndicator() {
@@ -131,7 +141,7 @@ export default class Photosynthesis extends Experiment {
       ctx.restore();
     });
   }
-  check() { if ([0, 1, 2, 3, 4, 5].every((i) => this.st.isDone(i))) this.lab.complete(); }
+  check() { this.st.check(); }
   update(dt) {
     const { r, limit, L } = this.rate();
     this.bub.setRate(r / 60 * 6);

@@ -54,7 +54,7 @@ export default class Space extends Experiment {
     this.tail = mesh(new THREE.ConeGeometry(0.006, 0.06, 12, 1, true), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.6, 1.2, 2.2), transparent: true, opacity: 0.4, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending })); this.comet.add(this.tail);
     this.cometLbl = this.lab.label(this.comet, 'Comet', { y: 0.02, cls: 'dimlab' });
     const ui = this.ui;
-    this.st = ui.steps(['Click the planets **in order** from the Sun', 'Calculate how long **sunlight takes to reach Earth**', '(S) Calculate Earth’s **orbital speed**', '(S) Watch the **comet**: where does it move fastest?', 'Answer the analysis questions']);
+    this.st = ui.steps(['Click the planets **in order** from the Sun', 'Calculate how long **sunlight takes to reach Earth**', { t: '(S) Calculate Earth’s **orbital speed**', o: ['P6.2.1.6'] }, { t: '(S) Watch the **comet**: where does it move fastest?', o: ['P6.2.1.7'] }, 'Answer the analysis questions']);
     const sec = ui.section('Orrery');
     ui.slider({ label: 'Time speed', min: 1, max: 400, step: 1, value: this.speed, unit: 'days/s', parent: sec, onInput: (v) => { this.speed = v; } });
     this.ro = ui.readouts([{ id: 'd', label: 'Days passed' }, { id: 'o', label: 'Order so far' }, { id: 'cv', label: 'Comet speed' }], sec);
@@ -102,6 +102,6 @@ export default class Space extends Experiment {
     if (bx?.[0]?.classList.contains('solved') && !this.st.isDone(1)) { this.st.done(1); this.check(); }
     if (bx?.[1]?.classList.contains('solved') && !this.st.isDone(2)) { this.st.done(2); this.check(); }
   }
-  check() { if ([0, 1, 2, 3, 4].every((i) => this.st.isDone(i))) this.lab.complete(); }
+  check() { this.st.check(); }
 }
 void canvasTex;

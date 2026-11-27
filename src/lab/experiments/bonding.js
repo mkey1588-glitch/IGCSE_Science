@@ -189,6 +189,6 @@ export default class Bonding extends Experiment {
     else { tweens.to(top.position, { x: x0 + 0.04 }, 0.8, { ease: ease.outBack }); this.ui.note('Pure metal: the layers slide over each other — **malleable**.', 'gold'); this.hitPure = true; }
     if (this.hitAlloy && this.hitPure) { this.st.done(3); this.check(); }
   }
-  check() { if ([0, 1, 2, 3, 4].every((i) => this.st.isDone(i))) this.lab.complete(); }
+  check() { this.st.check(); }
   update(dt) { this.animate?.(dt); }
 }

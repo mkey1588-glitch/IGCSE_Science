@@ -1,7 +1,10 @@
 // Question bank. Static entries: [subTopic, [objective numbers], question, [correct, wrong...] | {ans, unit, tol}, explanation, 'S'?]
 // The first option is always correct in the source; the quiz shuffles options.
 import { pick, rand, randInt, shuffle, sigfig } from '../core/util.js';
-import { OBJ, SUB } from './curriculum.js';
+import { OBJ, SUB, isSupplement } from './curriculum.js';
+
+/** Objective ids a question tests. */
+export const objectivesOf = (q) => (q.o || []).map((n) => `${q.t}.${n}`);
 
 const RAW = [
 // ---------------- BIOLOGY ----------------
@@ -475,7 +478,8 @@ export const GEN = {
 
 export const QUESTIONS = RAW.map((r, i) => {
   const [t, o, q, opts, e, s] = r;
-  const base = { id: `q${i}`, t, o, q, e, s: s === 'S' };
+  // Supplement if marked so, or if it tests any Supplement objective (the syllabus data decides)
+  const base = { id: `q${i}`, t, o, q, e, s: s === 'S' || isSupplement(objectivesOf({ t, o })) };
   if (Array.isArray(opts)) return { ...base, opts, a: 0 };
   return { ...base, ans: opts.ans, unit: opts.unit, tol: opts.tol };
 });
@@ -498,8 +502,9 @@ export function questionsFor(subs, n = 3, tier = 'extended') {
       if (useGen) {
         for (let k = 0; k < 6; k++) {
           const g = GEN[s]();
-          if (tier !== 'extended' && g.s) continue;
-          out.push({ id: `gen-${s}-${Math.random()}`, t: s, gen: true, ...g });
+          const sup = !!g.s || isSupplement(objectivesOf({ t: s, o: g.o }));
+          if (tier !== 'extended' && sup) continue;
+          out.push({ id: `gen-${s}-${Math.random()}`, t: s, gen: true, ...g, s: sup });
           break;
         }
       } else if (bySub[s]?.length) out.push(bySub[s].shift());

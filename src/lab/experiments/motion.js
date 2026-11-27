@@ -40,7 +40,7 @@ export default class Motion extends Experiment {
     this.sw = new Stopwatch(); this.lab.add(this.sw, -0.3, Y, 0.17);
     this.speedo = this.lab.label(kart, '0.0 m/s', { y: 0.06, cls: 'val' });
     const ui = this.ui;
-    this.st = ui.steps(['Program and run a trip with **rest, acceleration, constant speed and braking**', 'Find the **speed** from the gradient of the distance–time graph', 'Find the **distance** from the area under the speed–time graph', '(S) Find the **acceleration** from the gradient of the speed–time graph', 'Answer the analysis questions']);
+    this.st = ui.steps(['Program and run a trip with **rest, acceleration, constant speed and braking**', 'Find the **speed** from the gradient of the distance–time graph', 'Find the **distance** from the area under the speed–time graph', { t: '(S) Find the **acceleration** from the gradient of the speed–time graph', o: ['P1.2.11'] }, 'Answer the analysis questions']);
     const sec = ui.section('Kart program');
     const sl = (k, label, min, max, step, unit) => ui.slider({ label, min, max, step, value: this.p[k], unit, parent: sec, onInput: (v) => { this.p[k] = v; } });
     sl('rest', '1 · Wait at the start', 0, 4, 1, 's'); sl('a', '2 · Acceleration', 0.5, 4, 0.5, 'm/s²'); sl('ta', '2 · …for', 1, 6, 1, 's'); sl('cruise', '3 · Constant speed for', 0, 10, 1, 's'); sl('b', '4 · Braking deceleration', 1, 8, 1, 'm/s²');
@@ -65,6 +65,8 @@ export default class Motion extends Experiment {
     const T = p.rest + p.ta + p.cruise + tb;
     const total = 0.5 * p.a * p.ta * p.ta + v * p.cruise + 0.5 * v * tb;
     this.run = { t: 0, ...p, v, tb, T, total, crashed: false };
+    // the questions are scored against the run on the graphs: none until this run finishes without crashing
+    this.result = null;
     this.gd.clear(); this.gv.clear(); this.gd.o.x.max = Math.max(20, T + 1); this.gv.o.x.max = Math.max(20, T + 1); this.gv.o.y.max = Math.max(12, v + 1);
     this.kart.position.x = X0; audio.click(); this._sample = 0;
   }
@@ -82,7 +84,7 @@ export default class Motion extends Experiment {
     const r = this.run; if (!r || r.done) return;
     r.t = Math.min(r.T, r.t + dt);
     let [d, v] = this.state(r, r.t);
-    if (d > 100 && !r.crashed) { r.crashed = true; audio.bang?.(); this.ui.note('💥 **Crash!** The kart hit the barrier at 100 m. Its stopping distance was too long — reduce the speed or brake harder.', 'warn'); }
+    if (d > 100 && !r.crashed) { r.crashed = true; audio.bang?.(); this.ui.note('💥 **Crash!** The kart hit the barrier at 100 m. Its stopping distance was too long — reduce the speed or brake harder. A crashed run cannot be analysed: change the program and run it again.', 'warn'); }
     if (r.crashed) { d = 100; v = 0; }
     this.kart.position.x = X0 + d * SCALE;
     this.wheels.forEach((w) => { w.rotation.y = -d * 6; });
@@ -118,10 +120,11 @@ export default class Motion extends Experiment {
     this.ball = mesh(new THREE.SphereGeometry(0.012, 16, 12), mat('#f97316', 0.2, 0.4), 0, 1.07, 0); lg.add(this.ball);
     this.lab.label(lg, 'Light gates 1.00 m apart', { y: 1.2 });
     const ui = this.ui;
-    this.st2 = ui.steps(['Time **one swing** three times', 'Time **ten swings** three times and compare the spread', 'Measure the period for **three different lengths**', '(S) Measure **g** by timing a falling ball', '(S) Sort the quantities into **scalars and vectors**', 'Answer the analysis questions']);
+    this.st2 = ui.steps(['Time **one swing** three times', 'Time **ten swings** three times and compare the spread', 'Measure the period for **three different lengths**', { t: '(S) Measure **g** by timing a falling ball', o: ['P1.2.13'] }, { t: '(S) Sort the quantities into **scalars and vectors**', o: ['P1.1.4', 'P1.1.5', 'P1.1.6'] }, 'Answer the analysis questions']);
     const sec = ui.section('Pendulum');
-    ui.slider({ label: 'String length (measured with a metre rule)', min: 0.2, max: 1.0, step: 0.1, value: this.tm.L, unit: 'm', parent: sec, onInput: (v) => { this.tm.L = v; this.tm.t = 0; } });
-    ui.buttons([{ label: '⏱ Time 1 swing', onClick: () => this.timeSwings(1) }, { label: '⏱ Time 10 swings', kind: 'primary', onClick: () => this.timeSwings(10) }], sec);
+    // a timing keeps the length it started with; the length is locked until it is recorded
+    this.lenS = ui.slider({ label: 'String length (measured with a metre rule)', min: 0.2, max: 1.0, step: 0.1, value: this.tm.L, unit: 'm', parent: sec, onInput: (v) => { this.tm.L = v; this.tm.t = 0; } });
+    this.timeBtns = ui.buttons([{ label: '⏱ Time 1 swing', onClick: () => this.timeSwings(1) }, { label: '⏱ Time 10 swings', kind: 'primary', onClick: () => this.timeSwings(10) }], sec);
     this.ttab = ui.table(['L / m', 'Swings', 'Time / s', 'Period / s'], sec);
     this.gT = ui.graph({ x: { label: 'Length / m', min: 0, max: 1.1 }, y: { label: 'Period / s', min: 0, max: 2.2 }, series: [{ name: 'T', color: '#a3e635', points: true }], height: 140 }, sec);
     const ff = ui.section('(S) Free fall');
@@ -138,12 +141,16 @@ export default class Motion extends Experiment {
     ], { sub: 'P1.1', onDone: () => { this.st2.done(5); this.checkTab('timing', this.st2, 6); } });
     this.every((dt) => this.simTiming(dt));
   }
-  period() { return 2 * Math.PI * Math.sqrt(this.tm.L / 9.81); }
+  period(L = this.tm.L) { return 2 * Math.PI * Math.sqrt(L / 9.81); }
+  lockTiming(on) { this.lenS.disable(on); this.timeBtns.forEach((b) => { b.disabled = on; }); }
+  /** One timing: the length is fixed when it starts, and its row, plot point and steps use that length. */
   timeSwings(n) {
     if (this._timing) return;
-    const T = this.period(); const err = () => (Math.random() - 0.5) * 0.36;
+    const L = this.tm.L;
+    const T = this.period(L); const err = () => (Math.random() - 0.5) * 0.36;
     const measured = Math.max(0.1, n * T + err() - err());
-    this._timing = { n, left: n * T, measured, t: 0 };
+    this._timing = { n, L, left: n * T, measured, t: 0 };
+    this.lockTiming(true);
     audio.click();
   }
   simTiming(dt) {
@@ -156,18 +163,23 @@ export default class Motion extends Experiment {
       tg.t += dt; this.sw2.set(Math.min(tg.t, tg.measured));
       if (tg.t >= tg.left) {
         this._timing = null;
+        this.lockTiming(false);
         const per = tg.measured / tg.n;
-        tm.trials.push({ L: tm.L, n: tg.n, time: tg.measured, per });
-        this.ttab.add([tm.L.toFixed(1), tg.n, tg.measured.toFixed(2), `<b>${per.toFixed(2)}</b>`]);
+        tm.trials.push({ L: tg.L, n: tg.n, time: tg.measured, per });
+        this.ttab.add([tg.L.toFixed(1), tg.n, tg.measured.toFixed(2), `<b>${per.toFixed(2)}</b>`]);
         audio.blip();
-        const ones = tm.trials.filter((x) => x.n === 1), tens = tm.trials.filter((x) => x.n === 10);
-        if (ones.length >= 3) this.st2.done(0);
-        if (tens.length >= 3 && !this.st2.isDone(1)) {
+        // repeats are only compared under matching conditions: three timings at one length
+        const atOneLength = (n) => { const by = {}; for (const x of tm.trials) if (x.n === n) (by[x.L.toFixed(1)] ||= []).push(x); return Object.values(by).find((g) => g.length >= 3) || null; };
+        const ones = atOneLength(1), tens = atOneLength(10);
+        if (ones) this.st2.done(0);
+        if (tens && !this.st2.isDone(1)) {
           this.st2.done(1);
           const spread = (arr) => Math.max(...arr.map((x) => x.per)) - Math.min(...arr.map((x) => x.per));
-          if (ones.length >= 3) this.ui.note(`Spread of periods — single swings: **${spread(ones).toFixed(2)} s**; ten swings: **${spread(tens).toFixed(2)} s**. Timing multiples is far more precise.`, 'gold');
+          const onesHere = tm.trials.filter((x) => x.n === 1 && x.L === tens[0].L);
+          if (onesHere.length >= 3) this.ui.note(`Spread of periods at ${tens[0].L.toFixed(1)} m — single swings: **${spread(onesHere).toFixed(2)} s**; ten swings: **${spread(tens).toFixed(2)} s**. Timing multiples is far more precise.`, 'gold');
+          else this.ui.note(`Ten-swing periods at ${tens[0].L.toFixed(1)} m agree within **${spread(tens).toFixed(2)} s**. Time single swings at this length too to compare the spread.`, 'gold');
         }
-        if (tg.n === 10) { tm.lengths.add(tm.L.toFixed(1)); this.gT.add(0, tm.L, per); }
+        if (tg.n === 10) { tm.lengths.add(tg.L.toFixed(1)); this.gT.add(0, tg.L, per); }
         if (tm.lengths.size >= 3 && !this.st2.isDone(2)) { this.st2.done(2); this.ui.note('Longer pendulums swing more slowly — the period increases with length (but not in direct proportion).', 'gold'); }
         this.checkTab('timing', this.st2, 6);
       }
@@ -190,6 +202,6 @@ export default class Motion extends Experiment {
     this.svBox.append(wrap);
     if (QTY.every(([q, a]) => this.tm.sorted[q] === a) && !this.st2.isDone(4)) { this.st2.done(4); this.ui.note('Vectors have **magnitude and direction** (velocity, force, weight, acceleration); scalars have magnitude only.', 'gold'); this.checkTab('timing', this.st2, 6); }
   }
-  checkTab(id, st, n) { if (Array.from({ length: n }, (_, i) => i).every((i) => st.isDone(i))) this.lab.goal(id); }
+  checkTab(id, st) { st.check(); }
 }
 void roundRect;

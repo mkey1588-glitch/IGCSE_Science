@@ -2,7 +2,7 @@ import { Engine } from './core/engine.js';
 import { audio } from './core/audio.js';
 import { state, load, save, raise, addXP, checkAchievements } from './core/state.js';
 import { bus } from './core/events.js';
-import { UI } from './ui/ui.js';
+import { UI, restoreFocus } from './ui/ui.js';
 import { World } from './world/world.js';
 import { LabView } from './lab/lab.js';
 import { ConstellationView } from './constellation/constellation.js';
@@ -111,14 +111,22 @@ game.onScanned = (poi, first) => {
   save();
 };
 
-game.openLab = (id, opts = {}) => game.fade(async () => {
-  game.ui.closeAllModals();
-  game.engine.setView(game.lab);
-  game.mode = 'lab';
-  game.ui.showHUD(false);
-  const ok = await game.lab.open(id, opts);
-  if (!ok) { game.engine.setView(game.world); game.mode = 'world'; game.ui.showHUD(true); }
-});
+// Leaving a lab or the constellation puts keyboard focus back on what opened it, or on the
+// quest tracker's next action (or the 3D view) when that control has gone.
+let opener = null;
+const backToIsland = () => restoreFocus(opener, document.querySelector('.hud-quest .btn.primary') || document.querySelector('.hud-quest button'));
+
+game.openLab = (id, opts = {}) => {
+  if (game.mode === 'world') opener = document.activeElement;
+  return game.fade(async () => {
+    game.ui.closeAllModals();
+    game.engine.setView(game.lab);
+    game.mode = 'lab';
+    game.ui.showHUD(false);
+    const ok = await game.lab.open(id, opts);
+    if (!ok) { game.engine.setView(game.world); game.mode = 'world'; game.ui.showHUD(true); backToIsland(); }
+  });
+};
 
 game.closeLab = () => game.fade(async () => {
   game.lab.close();
@@ -128,15 +136,18 @@ game.closeLab = () => game.fade(async () => {
   game.ui.updateHUD();
   game.world.refreshSky();
   save();
-});
+}).then(backToIsland);
 
-game.openConstellation = () => game.fade(async () => {
-  game.ui.closeAllModals();
-  game.engine.setView(game.constellation);
-  game.mode = 'constellation';
-  game.ui.showHUD(false);
-  game.constellation.enter();
-});
+game.openConstellation = () => {
+  if (game.mode === 'world') opener = document.activeElement;
+  return game.fade(async () => {
+    game.ui.closeAllModals();
+    game.engine.setView(game.constellation);
+    game.mode = 'constellation';
+    game.ui.showHUD(false);
+    game.constellation.enter();
+  });
+};
 
 game.closeConstellation = () => game.fade(async () => {
   game.constellation.leave();
@@ -144,7 +155,7 @@ game.closeConstellation = () => game.fade(async () => {
   game.mode = 'world';
   game.ui.showHUD(true);
   audio.setMood('world');
-});
+}).then(backToIsland);
 
 // Expose for debugging in the console.
 window.CATALYST = game;

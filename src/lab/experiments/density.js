@@ -203,5 +203,5 @@ export default class Density extends Experiment {
     super.update(dt, t);
     if (this.tab === 'pressure' && this.stP && !this.stP.isDone(2)) { const k = this.ui.body?.querySelector('.aq'); if (k?.classList.contains('solved')) { this.stP.done(2); this.checkTab('pressure', this.stP, 4); } }
   }
-  checkTab(id, st, n) { if (Array.from({ length: n }, (_, i) => i).every((i) => st.isDone(i))) this.lab.goal(id); }
+  checkTab(id, st) { st.check(); }
 }

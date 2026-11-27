@@ -94,7 +94,7 @@ export default class Diffusion extends Experiment {
   }
   totalTime(s) { return (8 * s * s) / (Math.pow(this.runC, 0.7) * Math.pow(1.035, this.runT - 20)); }
 
-  check() { if ([0, 1, 2, 3, 4].every((i) => this.st.isDone(i))) this.lab.complete(); }
+  check() { this.st.check(); }
 
   update(dt, t) {
     this.bk.update(dt);

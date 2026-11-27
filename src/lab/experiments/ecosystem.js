@@ -133,6 +133,6 @@ export default class Ecosystem extends Experiment {
       const g = this.nodes?.[o.id]; if (g) g.scale.setScalar(0.6 + Math.min(1.4, v / o.pop) * 0.4);
     }
   }
-  check() { if ([0, 1, 2, 3, 4].every((i) => this.st.isDone(i))) this.lab.complete(); }
+  check() { this.st.check(); }
   update(dt, t) { Object.values(this.nodes).forEach((g, i) => { g.children[0].position.y = Math.sin(t * 1.5 + i) * 0.005; }); void dt; }
 }

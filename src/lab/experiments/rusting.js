@@ -53,7 +53,7 @@ export default class Rusting extends Experiment {
     });
     this.lab.label(rk, 'Iron nails · one week', { y: 0.27 });
     const ui = this.ui;
-    this.st = ui.steps(['**Predict** which nails will rust (click a tube or use the table)', '**Fast-forward** one week', 'Compare: what does iron need in order to rust?', '(S) Explain **sacrificial protection**', 'Answer the analysis questions']);
+    this.st = ui.steps(['**Predict** which nails will rust (click a tube or use the table)', '**Fast-forward** one week', 'Compare: what does iron need in order to rust?', { t: '(S) Explain **sacrificial protection**', o: ['C9.5.4', 'C9.5.5'] }, 'Answer the analysis questions']);
     const sec = ui.section('Predictions');
     this.predBox = h('div'); sec.append(this.predBox); this.drawPred();
     ui.buttons([{ label: '⏩ Fast-forward one week', kind: 'primary', onClick: () => this.go() }, { label: '⟲ Fresh nails', onClick: () => this.reset() }], sec);
@@ -134,5 +134,5 @@ export default class Rusting extends Experiment {
     this.st.done(2);
     this.check();
   }
-  check() { if ([0, 1, 2, 3, 4].every((i) => this.st.isDone(i))) this.lab.complete(); }
+  check() { this.st.check(); }
 }

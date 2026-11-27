@@ -84,7 +84,7 @@ export default class Enzymes extends Experiment {
     this.ui.note(time ? `Starch gone after **${time} s** → rate ${rate.toFixed(2)}.` : 'Even after 10 minutes the iodine still turns blue-black: the starch was not digested.', time ? '' : 'warn');
     this.check();
   }
-  check() { if ([0, 1, 2, 3, 4].every((i) => this.st.isDone(i))) this.lab.complete(); }
+  check() { this.st.check(); }
   update(dt, t) {
     this.tube.update(dt);
     const act = fT(this.T) * fpH(this.pH);
