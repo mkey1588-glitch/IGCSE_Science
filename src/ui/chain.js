@@ -51,7 +51,8 @@ export function runChain(ui, def) {
         solved = true; audio.connect();
         render(marks);
         for (const id of def.spark || []) sparkLink(id);
-        raise([...new Set(cards.map((c) => c.tag))], 2, 'chain');
+        // cards name whole sub-topics, not objectives: the chain sparks its links and counts its topics as seen
+        raise([...new Set(cards.map((c) => c.tag))], 1, 'chain');
         state.stats.chains++; save();
         addXP(40, 'chain');
         const done = h('div', { class: 'expl', style: { marginTop: '14px', padding: '12px 14px', borderRadius: '12px', background: 'rgba(255,209,102,.08)', border: '1px solid rgba(255,209,102,.3)', lineHeight: 1.6 } },

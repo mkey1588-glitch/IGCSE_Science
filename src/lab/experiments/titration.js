@@ -15,6 +15,25 @@ const UI_SCALE = [[0, '#dc2626'], [2, '#f97316'], [4, '#facc15'], [6, '#a3e635']
 const lerpHex = (a, b, k) => '#' + new THREE.Color(a).lerp(new THREE.Color(b), clamp(k, 0, 1)).getHexString();
 const r05 = (v) => Math.round(v * 20) / 20;
 const TOP = 0.7, BOT = 0.24, TAP = 0.2; // burette geometry (local y)
+export const ENDPOINT_TOL = 0.1; // cm³ (two drops): a titre recorded further past the colour change has overshot
+export const CONCORDANT = 0.1; // cm³: titres in a qualifying set must all lie within this range
+
+/**
+ * The largest set of titres that all agree within `tol` (largest minus smallest ≤ tol), as indices
+ * into `titres`, or [] when no two agree. Ties go to the tighter set. This judges agreement only;
+ * end-point validity is checked separately, before titres get here.
+ */
+export function concordantSubset(titres, tol = CONCORDANT) {
+  const sorted = titres.map((v, i) => ({ v, i })).sort((a, b) => a.v - b.v);
+  let best = null;
+  for (let a = 0; a < sorted.length; a++) {
+    let b = a;
+    while (b + 1 < sorted.length && sorted[b + 1].v - sorted[a].v <= tol + 1e-9) b++;
+    const size = b - a + 1, range = sorted[b].v - sorted[a].v;
+    if (size >= 2 && (!best || size > best.size || (size === best.size && range < best.range - 1e-9))) best = { size, range, members: sorted.slice(a, b + 1) };
+  }
+  return best ? best.members.map((m) => m.i).sort((x, y) => x - y) : [];
+}
 
 export default class Titration extends Experiment {
   constructor(...a) {
@@ -219,26 +238,34 @@ export default class Titration extends Experiment {
     const initial = r05(this.startReading), final = r05(this.reading), titre = +(final - initial).toFixed(2);
     const s = this.flaskSample;
     const rough = !this.records.some((r) => r.sample === s);
-    const over = this.added - this.endV;
-    const rec = { sample: s, initial, final, titre, rough, over };
+    // end-point validity: how far past the colour change this titre was recorded
+    const over = Math.max(0, this.added - this.endV);
+    const valid = over <= ENDPOINT_TOL + 1e-9;
+    const rec = { sample: s, ind: this.ind, initial, final, titre, rough, over, valid };
     this.records.push(rec);
     rec.tr = this.table.add([this.records.length, s, initial.toFixed(2), final.toFixed(2), `<b>${titre.toFixed(2)}</b>`, rough ? '<span class="faint">rough</span>' : '—']);
     this.flaskState = 'done'; audio.success();
     if (rough) { this.st.done(3); this.ui.note(`Rough titre ${titre.toFixed(2)} cm³. Now repeat: run fast to about **${Math.max(0, titre - 1.5).toFixed(1)} cm³**, then add acid **one drop at a time**, swirling.`, 'gold'); }
-    else if (over > 0.3) this.ui.note(`You overshot the end-point by about ${over.toFixed(2)} cm³ — this titre is too large. Go dropwise near the end.`, 'warn');
+    else if (!valid) this.ui.note(`You went **${over.toFixed(2)} cm³** past the end-point, so this titre is too large. It stays in the table but is left out of the mean. Add acid one drop at a time near the end-point.`, 'warn');
     this.checkConcordant(s);
   }
+  /** Agreement between readings: the largest set of valid titres (same tablet, same indicator) within 0.10 cm³. */
   checkConcordant(s) {
     const acc = this.records.filter((r) => r.sample === s && !r.rough);
-    let best = null;
-    for (let i = 0; i < acc.length; i++) for (let j = i + 1; j < acc.length; j++) {
-      const d = Math.abs(acc[i].titre - acc[j].titre);
-      if (d <= 0.1001 && (!best || d < best.d)) best = { d, a: acc[i], b: acc[j] };
+    const valid = acc.filter((r) => r.valid);
+    let group = [];
+    for (const ind of new Set(valid.map((r) => r.ind))) {
+      const same = valid.filter((r) => r.ind === ind);
+      const members = concordantSubset(same.map((r) => r.titre)).map((i) => same[i]);
+      if (members.length > group.length) group = members;
     }
-    if (!best) { if (acc.length >= 2) this.ui.note('Not concordant yet — titres must agree within **0.10 cm³**. Do another.', 'warn'); return; }
-    const group = acc.filter((r) => Math.abs(r.titre - (best.a.titre + best.b.titre) / 2) <= 0.1001);
+    for (const r of acc) r.tr.lastChild.innerHTML = !r.valid ? `<span class="warn-text">overshot by ${r.over.toFixed(2)} cm³ — not used</span>` : group.includes(r) ? '✓ concordant' : '<span class="faint">✗ not concordant</span>';
+    if (group.length < 2) {
+      this.mean[s] = null; this.ro2.set(s, '—');
+      if (valid.length >= 2) this.ui.note('Not concordant yet — accurate titres must all agree within **0.10 cm³**. Do another.', 'warn');
+      return;
+    }
     const mean = group.reduce((t, r) => t + r.titre, 0) / group.length;
-    for (const r of acc) r.tr.lastChild.innerHTML = group.includes(r) ? '✓ concordant' : '<span class="faint">✗</span>';
     const first = this.mean[s] == null;
     this.mean[s] = +mean.toFixed(2);
     this.ro2.set(s, this.mean[s].toFixed(2));
@@ -251,7 +278,7 @@ export default class Titration extends Experiment {
     }
     this.check();
   }
-  check() { if ([0, 1, 2, 3, 4, 5, 6].every((i) => this.st.isDone(i))) this.lab.complete(); }
+  check() { this.st.check(); }
 
   // ------------------------------------------------------------------ visuals
   updateBurette() {

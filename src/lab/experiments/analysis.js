@@ -252,6 +252,6 @@ export default class Analysis extends Experiment {
     this.checkTab('gases', this.stG, 3);
   }
 
-  checkTab(id, st, n) { if (Array.from({ length: n }, (_, i) => i).every((i) => st.isDone(i))) this.lab.goal(id); }
+  checkTab(id, st) { st.check(); }
 }
 void h; void clear;

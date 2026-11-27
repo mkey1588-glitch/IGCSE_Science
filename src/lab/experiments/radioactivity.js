@@ -23,7 +23,7 @@ export default class Radioactivity extends Experiment {
     this.tabViews = { penetration: { pos: [0, 1.32, 0.75], target: [0, 1.0, 0] }, halflife: { pos: [0, 1.4, 0.8], target: [0, 1.0, 0] } };
     this.view = this.tabViews.penetration;
   }
-  checkTab(id, st, n) { if (Array.from({ length: n }, (_, i) => i).every((i) => st.isDone(i))) this.lab.goal(id); }
+  checkTab(id, st) { st.check(); }
 
   // ======================================================== penetration
   tab_penetration() {
@@ -125,7 +125,7 @@ export default class Radioactivity extends Experiment {
     this.nuc.instanceMatrix.needsUpdate = true; this.nuc.instanceColor.needsUpdate = true;
     this.lab.label(tray, 'Sample of 400 unstable nuclei (green = undecayed)', { y: 0.05 });
     const ui = this.ui;
-    this.stL = ui.steps(['Start the decay and watch it happen **randomly**', 'Read the **half-life** from your graph', '(S) Complete a **decay equation**', 'Answer the analysis questions']);
+    this.stL = ui.steps(['Start the decay and watch it happen **randomly**', 'Read the **half-life** from your graph', { t: '(S) Complete a **decay equation**', o: ['P5.2.3.4'] }, 'Answer the analysis questions']);
     const sec = ui.section('Decay');
     ui.buttons([{ label: '▶ Start', kind: 'primary', onClick: () => this.startDecay() }, { label: '⟲ Fresh sample', onClick: () => this.resetDecay() }], sec);
     this.roL = ui.readouts([{ id: 't', label: 'Time', unit: 's' }, { id: 'N', label: 'Undecayed nuclei' }], sec);

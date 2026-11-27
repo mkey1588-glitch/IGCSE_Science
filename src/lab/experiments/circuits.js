@@ -28,7 +28,7 @@ export default class Circuits extends Experiment {
     this.tabViews = { build: { pos: [0, 1.42, 0.68], target: [0, 0.94, 0.0] }, static: { pos: [0, 1.32, 0.85], target: [0, 1.05, 0] }, home: { pos: [0, 1.34, 0.8], target: [0, 1.0, 0] } };
     this.view = this.tabViews.build;
   }
-  checkTab(id, st, n) { if (Array.from({ length: n }, (_, i) => i).every((i) => st.isDone(i))) this.lab.goal(id); }
+  checkTab(id, st) { st.check(); }
 
   // ======================================================== build
   tab_build() {
@@ -39,7 +39,7 @@ export default class Circuits extends Experiment {
     this.electrons = new THREE.InstancedMesh(new THREE.SphereGeometry(0.0028, 6, 5), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.4, 1.4, 2.4) }), 400); this.electrons.frustumCulled = false; this.lab.add(this.electrons, 0, Y + 0.016, 0); this.electrons.count = 0;
     this._o = new THREE.Object3D(); this.flows = [];
     const ui = this.ui;
-    this.stB = ui.steps(['**Series:** measure the current at two places and the voltage across each lamp', '**Parallel:** show the branch currents add up to the total', 'Unscrew a lamp in each circuit — which keeps working?', 'Plot an **I–V graph** for a resistor and find its resistance', '(S) Plot I–V graphs for a **filament lamp** and a **diode**', 'Answer the analysis questions']);
+    this.stB = ui.steps(['**Series:** measure the current at two places and the voltage across each lamp', '**Parallel:** show the branch currents add up to the total', 'Unscrew a lamp in each circuit — which keeps working?', 'Plot an **I–V graph** for a resistor and find its resistance', { t: '(S) Plot I–V graphs for a **filament lamp** and a **diode**', o: ['P4.2.4.3'] }, 'Answer the analysis questions']);
     const sec = ui.section('Circuit');
     ui.seg({ label: 'Layout', options: [['series', 'Series'], ['parallel', 'Parallel'], ['iv', 'I–V tester']], value: 'series', parent: sec, onChange: (v) => { this.c.mode = v; this.c.out1 = false; this.layout(); } });
     this.vSl = ui.slider({ label: 'Battery (e.m.f.)', min: 1.5, max: 12, step: 1.5, value: this.c.V, unit: 'V', parent: sec, onInput: (v) => { this.c.V = v; this.solve(); } });

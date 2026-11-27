@@ -44,7 +44,7 @@ export default class Forces extends Experiment {
     const rl = ruler(0.5); rl.rotation.order = 'ZXY'; rl.rotation.set(Math.PI / 2, 0, Math.PI / 2); this.lab.add(rl, 0.085, Y + 0.25, -0.04);
     this.lab.label(this.top, 'Spring + slotted masses (1 N each)', { y: 0.06 });
     const ui = this.ui;
-    this.stS = ui.steps(['Add loads one at a time and **record the extension** (at least 6 readings)', 'Keep loading past the **limit of proportionality**', '(S) Calculate the **spring constant** k = F ÷ x', 'Unload: does it return to its original length?', 'Answer the analysis questions']);
+    this.stS = ui.steps(['Add loads one at a time and **record the extension** (at least 6 readings)', 'Keep loading past the **limit of proportionality**', { t: '(S) Calculate the **spring constant** k = F ÷ x', o: ['P1.5.1.9'] }, 'Unload: does it return to its original length?', 'Answer the analysis questions']);
     const sec = ui.section('Loading');
     ui.buttons([{ label: '+ Add 1 N', kind: 'primary', onClick: () => this.setLoad(this.sp.load + 1) }, { label: '− Remove 1 N', onClick: () => this.setLoad(this.sp.load - 1) }, { label: '📏 Record', onClick: () => this.record() }], sec);
     this.roS = ui.readouts([{ id: 'F', label: 'Load', unit: 'N' }, { id: 'L', label: 'Length', unit: 'cm' }, { id: 'x', label: 'Extension', unit: 'cm' }], sec);
@@ -276,7 +276,7 @@ export default class Forces extends Experiment {
     this.checkTab('cog', this.stG, 4);
   }
 
-  checkTab(id, st, n) { if (Array.from({ length: n }, (_, i) => i).every((i) => st.isDone(i))) this.lab.goal(id); }
+  checkTab(id, st) { st.check(); }
   update(dt, t) {
     super.update(dt, t);
     if (this.tab === 'springs' && this.stS && !this.stS.isDone(2)) { const k = this.ui.body?.querySelector('.aq'); if (k?.classList.contains('solved')) { this.stS.done(2); this.checkTab('springs', this.stS, 5); } }

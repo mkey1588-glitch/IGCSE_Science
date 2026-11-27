@@ -116,6 +116,6 @@ export default class FoodTests extends Experiment {
     }
     this.matrix.append(tb);
   }
-  check() { if ([0, 1, 2, 3, 4, 5].every((i) => this.st.isDone(i))) this.lab.complete(); }
+  check() { this.st.check(); }
   update(dt) { this.tr.update(dt); }
 }

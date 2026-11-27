@@ -1,13 +1,16 @@
 import { store } from './util.js';
 import { bus } from './events.js';
-import { expandIds, OBJ, SUB, SUBTOPICS, OBJECTIVES } from '../data/curriculum.js';
+import { expandIds, OBJ, SUB, SUBTOPICS, OBJECTIVES, isSupplement } from '../data/curriculum.js';
 import { LINKS } from '../data/links.js';
 
-const KEY = 'catalyst.save.v1';
+const KEY = 'catalyst.save.v1'; // storage key stays the same; the save format is versioned by `v`
+const VERSION = 2;
 const DEFAULT = () => ({
-  v: 1, name: '', created: Date.now(), playTime: 0,
+  v: VERSION, name: '', created: Date.now(), playTime: 0,
   xp: 0, level: 1,
-  mastery: {}, // objectiveId -> 0..3 (1 discovered, 2 practised, 3 mastered)
+  mastery: {}, // objectiveId -> 0..3 (1 discovered, 2 practised, 3 mastered), always derived from `evidence`
+  // objectiveId -> { v: seen it, p: did practical work on it, c: [different questions answered right first time], w: wrong answers }
+  evidence: {},
   quests: {}, // questId -> { status: 'active'|'done', step: n }
   tracked: null,
   scanned: {}, exps: {}, holos: {}, links: {}, visited: {}, flags: {}, achievements: {},
@@ -20,10 +23,30 @@ export const state = DEFAULT();
 export const hasSave = () => !!store.get(KEY);
 export function load() {
   const s = store.get(KEY);
-  if (!s || s.v !== 1) return false;
+  if (!s || (s.v !== 1 && s.v !== VERSION)) return false;
   const d = DEFAULT();
   Object.assign(state, d, s, { settings: { ...d.settings, ...(s.settings || {}) }, stats: { ...d.stats, ...(s.stats || {}) } });
+  if (s.v === 1) migrateV1();
   return true;
+}
+/**
+ * Version 1 saves kept only a level per objective. A 3 could come from one correct answer, and
+ * opening a lab or finishing a quest credited every objective of a sub-topic, Supplement ones included,
+ * whatever the tier. Rebuild the evidence conservatively: 1 → seen, 2 → practised, 3 → one correct
+ * answer (shown as practised until more evidence arrives). On the Core tier, Supplement entries came
+ * from that sub-topic crediting, so they are dropped. Quests, XP, links, achievements and flags are kept.
+ */
+function migrateV1() {
+  const evidence = {};
+  for (const [id, lvl] of Object.entries(state.mastery || {})) {
+    if (!OBJ[id] || !lvl) continue;
+    if (state.settings.tier !== 'extended' && OBJ[id].tier === 'S') continue;
+    evidence[id] = lvl >= 3 ? { v: 1, c: ['v1-answer'] } : lvl >= 2 ? { v: 1, p: 1 } : { v: 1 };
+  }
+  state.evidence = evidence;
+  state.mastery = {};
+  for (const id in evidence) state.mastery[id] = levelOf(evidence[id]);
+  state.v = VERSION;
 }
 export function save() { store.set(KEY, state); }
 export function newGame(name, tier) {
@@ -56,19 +79,55 @@ export function addXP(n, reason) {
 
 // ---------------- mastery ----------------
 export const tierOK = (objId) => state.settings.tier === 'extended' || OBJ[objId]?.tier === 'C';
-export function raise(ids, level, source) {
-  const objIds = expandIds(ids, 'extended');
-  const changed = [];
+/** Is this work required of the learner? Supplement work is an optional extra on the Core tier. */
+export const requiredFor = (ids) => state.settings.tier === 'extended' || !isSupplement(ids);
+
+/** Mastery level from evidence: one correct answer or practical work is "practised"; mastery needs more. */
+export function levelOf(e) {
+  if (!e) return 0;
+  const right = e.c ? e.c.length : 0;
+  if (right >= 2 || (right >= 1 && e.p)) return 3;
+  if (right >= 1 || e.p) return 2;
+  return e.v || e.w ? 1 : 0;
+}
+
+/**
+ * The objectives a piece of work credits. Objective ids are credited as given: the learner did that
+ * work. Sub-topics, topics and sections expand to the learner's own tier only, so Core work never
+ * credits Supplement objectives, and switching to Extended later shows them as not yet done.
+ */
+export function creditTargets(ids) {
+  const out = new Set(), broad = [];
+  for (const id of ids || []) { if (OBJ[id]) out.add(id); else broad.push(id); }
+  for (const id of expandIds(broad, state.settings.tier)) out.add(id);
+  return [...out];
+}
+
+function addEvidence(objIds, kind, source, key) {
+  const raised = new Map(); // new level -> objective ids
   for (const id of objIds) {
-    const cur = state.mastery[id] || 0;
-    if (level > cur) { state.mastery[id] = level; changed.push(id); }
+    const e = (state.evidence[id] ||= {});
+    const before = state.mastery[id] || 0;
+    e.v = 1;
+    if (kind === 'p') e.p = 1;
+    else if (kind === 'w') e.w = (e.w || 0) + 1;
+    else if (kind === 'c') { e.c ||= []; if (!e.c.includes(key) && e.c.length < 3) e.c.push(key); }
+    const after = levelOf(e);
+    state.mastery[id] = after;
+    if (after > before) { if (!raised.has(after)) raised.set(after, []); raised.get(after).push(id); }
   }
+  const changed = [...raised.values()].flat();
   if (changed.length) {
-    bus.emit('mastery', changed, level, source);
+    for (const [lvl, ids] of raised) bus.emit('mastery', ids, lvl, source);
     checkLinks(source);
-    save();
   }
+  save();
   return changed;
+}
+
+/** Credit work: level 1 = seen it, level 2 = did practical work on it. Answers go through recordAnswer. */
+export function raise(ids, level, source) {
+  return addEvidence(creditTargets(ids), level >= 2 ? 'p' : 'v', source);
 }
 export const objLevel = (id) => state.mastery[id] || 0;
 export function subStats(subId) {
@@ -170,11 +229,21 @@ export function checkAchievements() {
   }
 }
 
-export function recordAnswer(correct, ids) {
+let anonymous = 0;
+/**
+ * Record one answer as evidence for the objectives the question tests. `correct` means right first
+ * time. `key` names the question, so answering the same question again is not new evidence.
+ * A question tagged only with a sub-topic cannot say which objective it tested, so it counts as "seen".
+ */
+export function recordAnswer(correct, ids, { key = `answer-${++anonymous}`, source = 'quiz' } = {}) {
   const s = state.stats;
   s.answered++;
-  if (correct) { s.correct++; s.streak++; s.best = Math.max(s.best, s.streak); raise(ids, 3, 'quiz'); addXP(10, 'answer'); }
-  else { s.streak = 0; raise(ids, 1, 'quiz'); }
+  if (correct) { s.correct++; s.streak++; s.best = Math.max(s.best, s.streak); addXP(10, 'answer'); }
+  else s.streak = 0;
+  const objectives = (ids || []).filter((id) => OBJ[id]);
+  const broad = (ids || []).filter((id) => !OBJ[id]);
+  if (objectives.length) addEvidence(objectives, correct ? 'c' : 'w', source, key);
+  if (broad.length) addEvidence(creditTargets(broad), 'v', source);
   checkAchievements();
   save();
 }

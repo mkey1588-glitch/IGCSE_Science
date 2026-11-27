@@ -100,5 +100,5 @@ export default class Energetics extends Experiment {
       this.sortBox.append(row);
     }
   }
-  check() { if ([0, 1, 2, 3, 4].every((i) => this.st.isDone(i))) this.lab.complete(); }
+  check() { this.st.check(); }
 }

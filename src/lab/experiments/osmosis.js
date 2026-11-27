@@ -126,6 +126,6 @@ export default class Osmosis extends Experiment {
     this.check();
   }
   isotonic() { if (!this.pts) return null; const f = linearFit(this.pts); return f ? -f.c / f.m : null; }
-  check() { if ([0, 1, 2, 3, 4, 5].every((i) => this.st.isDone(i))) this.lab.complete(); }
+  check() { this.st.check(); }
   update(dt) { for (const t of this.tubes) t.update(dt); }
 }

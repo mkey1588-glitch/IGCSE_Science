@@ -83,7 +83,7 @@ export default class Optics extends Experiment {
     if (!this.box) { this.box = mesh(new THREE.BoxGeometry(0.06, 0.03, 0.035), mat('#1f2937', 0.3, 0.5)); this.lab.tabRoot.add(this.box); this.lab.label(this.box, 'Ray box', { y: 0.04, cls: 'dimlab' }); }
     this.box.position.set(p.x, this.Y + 0.017, p.y); this.box.rotation.y = -ang;
   }
-  checkTab(id, st, n) { if (Array.from({ length: n }, (_, i) => i).every((i) => st.isDone(i))) this.lab.goal(id); }
+  checkTab(id, st) { st.check(); }
 
   // ======================================================== reflection
   tab_reflect() {
@@ -92,7 +92,7 @@ export default class Optics extends Experiment {
     const mir = mesh(new THREE.BoxGeometry(0.3, 0.05, 0.006), new THREE.MeshStandardMaterial({ color: '#e5e7eb', metalness: 1, roughness: 0.05 })); this.lab.add(mir, 0, this.Y + 0.025, -0.1);
     this.lab.label(mir, 'Plane mirror', { y: 0.05, cls: 'dimlab' });
     const ui = this.ui;
-    this.stF = ui.steps(['Record the angles of incidence and reflection for **three** angles', '(S) Construct the **image** of a pin in the mirror', 'Answer the analysis questions']);
+    this.stF = ui.steps(['Record the angles of incidence and reflection for **three** angles', { t: '(S) Construct the **image** of a pin in the mirror', o: ['P3.2.1.5'] }, 'Answer the analysis questions']);
     const sec = ui.section('Ray box');
     ui.slider({ label: 'Angle of incidence (to the normal)', min: 0, max: 75, step: 5, value: this.rf.i, unit: '°', parent: sec, onInput: (v) => { this.rf.i = v; this.drawReflect(); } });
     ui.buttons([{ label: '📐 Record angles', kind: 'primary', onClick: () => this.recReflect() }, { label: '📍 Pin & image (S)', onClick: () => { this.rf.img = !this.rf.img; this.drawReflect(); if (this.rf.img) { this.stF.done(1); this.ui.note('Rays from the pin reflect into your eye. Traced **back** (dashed), they seem to come from a point **behind** the mirror — a **virtual** image, the same distance behind as the pin is in front, upright, same size, laterally inverted.', 'gold'); this.checkTab('reflect', this.stF, 3); } } }], sec);
@@ -142,7 +142,7 @@ export default class Optics extends Experiment {
     semi.push(v2(-0.1, 0)); this.semiPoly = semi;
     this.glass = null;
     const ui = this.ui;
-    this.stR = ui.steps(['Measure **angles of incidence and refraction** for a glass block (three angles)', '(S) Calculate the **refractive index** n = sin i ÷ sin r', '(S) Use the semicircular block to find the **critical angle** and see **total internal reflection**', 'Answer the analysis questions']);
+    this.stR = ui.steps(['Measure **angles of incidence and refraction** for a glass block (three angles)', { t: '(S) Calculate the **refractive index** n = sin i ÷ sin r', o: ['P3.2.2.5'] }, { t: '(S) Use the semicircular block to find the **critical angle** and see **total internal reflection**', o: ['P3.2.2.6', 'P3.2.2.7'] }, 'Answer the analysis questions']);
     const sec = ui.section('Set-up');
     ui.seg({ label: 'Glass block', options: [['rect', 'Rectangular'], ['semi', 'Semicircular (S)']], value: 'rect', parent: sec, onChange: (v) => { this.rr.shape = v; this.drawRefract(); } });
     ui.slider({ label: 'Angle of incidence', min: 0, max: 80, step: 1, value: this.rr.i, unit: '°', parent: sec, onInput: (v) => { this.rr.i = v; this.drawRefract(); } });
@@ -203,7 +203,7 @@ export default class Optics extends Experiment {
     const lens = mesh(new THREE.SphereGeometry(0.2, 32, 16), new THREE.MeshPhysicalMaterial({ color: '#bae6fd', transparent: true, opacity: 0.35, roughness: 0.05, clearcoat: 1, depthWrite: false })); lens.scale.set(0.06, 0.12, 0.6); this.lab.add(lens, 0, this.Y + 0.015, 0);
     this.lab.label(lens, 'Converging lens (f = 10 cm)', { y: 0.06 });
     const ui = this.ui;
-    this.stL = ui.steps(['Shine a **parallel beam** and find the principal focus', 'Place the object **beyond 2F** — describe the image', 'Place the object **between F and 2F**', '(S) Place the object **inside F**: a magnifying glass', 'Answer the analysis questions']);
+    this.stL = ui.steps(['Shine a **parallel beam** and find the principal focus', 'Place the object **beyond 2F** — describe the image', 'Place the object **between F and 2F**', { t: '(S) Place the object **inside F**: a magnifying glass', o: ['P3.2.3.7'] }, 'Answer the analysis questions']);
     const sec = ui.section('Optical bench');
     ui.seg({ label: 'Light source', options: [['parallel', 'Parallel beam'], ['object', 'Object (arrow)']], value: 'object', parent: sec, onChange: (v) => { this.ln.mode = v; this.drawLens(); } });
     ui.slider({ label: 'Object distance u', min: 4, max: 40, step: 1, value: this.ln.u, unit: 'cm', parent: sec, onInput: (v) => { this.ln.u = v; this.drawLens(); } });

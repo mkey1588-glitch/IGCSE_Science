@@ -162,5 +162,5 @@ export default class Climate extends Experiment {
     this.drops.forEach((d, i) => { d.y -= dt * 0.12; if (d.y < 0.05) d.y = 0.19; o.position.set(d.x, d.y, d.z); o.updateMatrix(); this.rain.setMatrixAt(i, o.matrix); });
     this.rain.instanceMatrix.needsUpdate = true;
   }
-  check() { if ([0, 1, 2, 3, 4].every((i) => this.st.isDone(i))) this.lab.complete(); }
+  check() { this.st.check(); }
 }

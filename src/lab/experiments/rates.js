@@ -232,7 +232,7 @@ export default class Rates extends Experiment {
   }
   check() {
     if (this.catPair && this.weighed) this.st.done(4);
-    if ([0, 1, 2, 3, 4, 5, 6].every((i) => this.st.isDone(i))) this.lab.complete();
+    this.st.check();
   }
 
   // ------------------------------------------------------------------ loop

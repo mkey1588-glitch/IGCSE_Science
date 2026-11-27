@@ -156,7 +156,7 @@ export default class Water extends Experiment {
     this.ro2.set('d', d.dist.toFixed(1));
     if (d.dist >= 10 && !this.st.isDone(2)) { this.st.done(2); this.ui.note('Water vapour condenses in the cold condenser and drips into the beaker. The **salt stays behind** in the flask.', 'gold'); this.check(); }
   }
-  check() { if ([0, 1, 2, 3, 4].every((i) => this.st.isDone(i))) this.lab.complete(); }
+  check() { this.st.check(); }
   dispose() { this.burner?.dispose(); super.dispose(); }
 }
 void M;

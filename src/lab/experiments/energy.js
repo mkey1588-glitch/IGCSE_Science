@@ -36,7 +36,7 @@ export default class Energy extends Experiment {
     this.cart.add(mesh(new THREE.BoxGeometry(0.03, 0.012, 0.026), mat('#dc2626', 0.4, 0.35), 0, 0.01, 0), mesh(new THREE.BoxGeometry(0.008, 0.012, 0.024), mat('#111827'), -0.008, 0.02, 0));
     this.cartLbl = this.lab.label(this.cart, '', { y: 0.05, cls: 'val' });
     this.buildTrack();
-    this.st = ui.steps(['Release the cart **without friction** and watch GPE ↔ KE', '(S) Calculate the **speed** at the bottom of the first drop', 'Turn **friction on**: where does the energy go? (Sankey)', 'Stop the cart in the brake run: **work = force × distance**', 'Haul the cart up the lift hill: **power = work ÷ time**', 'Answer the analysis questions']);
+    this.st = ui.steps(['Release the cart **without friction** and watch GPE ↔ KE', { t: '(S) Calculate the **speed** at the bottom of the first drop', o: ['P1.6.1.4', 'P1.6.1.5'] }, 'Turn **friction on**: where does the energy go? (Sankey)', 'Stop the cart in the brake run: **work = force × distance**', 'Haul the cart up the lift hill: **power = work ÷ time**', 'Answer the analysis questions']);
     const sec = ui.section('Ride settings');
     ui.slider({ label: 'Lift-hill height', min: 20, max: 40, step: 5, value: this.p.h0, unit: 'm', parent: sec, onInput: (v) => { this.p.h0 = v; this.buildTrack(); } });
     ui.slider({ label: 'Cart + riders mass', min: 200, max: 600, step: 100, value: this.p.m, unit: 'kg', parent: sec, onInput: (v) => { this.p.m = v; } });
@@ -175,7 +175,7 @@ export default class Energy extends Experiment {
   check() {
     const boxes = this.qs?.querySelectorAll('.aq');
     if (boxes?.[0]?.classList.contains('solved')) this.st.done(1);
-    if ([0, 1, 2, 3, 4, 5].every((i) => this.st.isDone(i))) this.lab.complete();
+    this.st.check();
   }
   update(dt, t) { super.update(dt, t); if (!this.st?.isDone(1) && this.qs?.querySelector('.aq')?.classList.contains('solved')) { this.st.done(1); this.check(); } }
 }

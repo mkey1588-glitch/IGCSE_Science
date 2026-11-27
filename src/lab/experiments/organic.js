@@ -79,7 +79,7 @@ export default class Organic extends Experiment {
     const ring = mesh(new THREE.TorusGeometry(0.125, 0.003, 6, 60), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.4, 2.2, 2) })); ring.rotation.x = Math.PI / 2; this.lab.add(ring, 0, Y + 0.021, 0);
     this.nameLbl = this.lab.label(this.stage, '', { y: 0.1, cls: 'big' });
     const ui = this.ui;
-    this.st = ui.steps(['Build **methane, ethane, ethene and ethanol**', '(S) Build the first **four members** of one homologous series', 'Zip ethene into **poly(ethene)** (addition polymerisation)', '(S) Make **nylon** (condensation polymerisation)', 'Balance the **complete combustion of ethanol**', 'Answer the analysis questions']);
+    this.st = ui.steps(['Build **methane, ethane, ethene and ethanol**', { t: '(S) Build the first **four members** of one homologous series', o: ['C11.1.5', 'C11.2.3'] }, 'Zip ethene into **poly(ethene)** (addition polymerisation)', { t: '(S) Make **nylon** (condensation polymerisation)', o: ['C11.7.5', 'C11.7.6'] }, 'Balance the **complete combustion of ethanol**', 'Answer the analysis questions']);
     const sec = ui.section('Molecule builder');
     this.famSeg = ui.seg({ label: 'Family', options: [['alkane', 'Alkane (C–C)'], ['alkene', 'Alkene (C=C)'], ['alcohol', 'Alcohol (–OH)']], value: this.fam, parent: sec, onChange: (v) => { this.fam = v; if (v === 'alkene' && this.n < 2) { this.n = 2; this.nSl.set(2); } this.show(); } });
     this.nSl = ui.slider({ label: 'Carbon atoms', min: 1, max: 4, step: 1, value: this.n, parent: sec, onInput: (v) => { this.n = this.fam === 'alkene' ? Math.max(2, v) : v; this.show(); } });
@@ -179,5 +179,5 @@ export default class Organic extends Experiment {
     this.ui.note('**Condensation polymerisation:** each amide link (green) forms as a **water molecule** is released. Nylon’s repeat unit: –[CO–(CH₂)₄–CO–NH–(CH₂)₆–NH]–.', 'gold');
     this.check();
   }
-  check() { if ([0, 1, 2, 3, 4, 5].every((i) => this.st.isDone(i))) this.lab.complete(); }
+  check() { this.st.check(); }
 }

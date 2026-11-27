@@ -113,6 +113,6 @@ export default class Sound extends Experiment {
       if (c.n >= 21) { this.echoT = +(c.period * 20 * (1 + (Math.random() - 0.5) * 0.02)).toFixed(2); this.ro2.set('t', this.echoT.toFixed(2)); this.claps = null; this.st.done(3); this.ui.note(`20 claps took **${this.echoT.toFixed(2)} s**. Each interval the sound went to the wall and back: 2 × ${WALL} m.`, 'gold'); this.check(); }
     }
   }
-  check() { if ([0, 1, 2, 3, 4].every((i) => this.st.isDone(i))) this.lab.complete(); }
+  check() { this.st.check(); }
   dispose() { this.sig?.stop(); super.dispose(); }
 }

@@ -93,7 +93,7 @@ export default class Genetics extends Experiment {
     this.ui.note('Masses form a smooth bell-shaped spread (continuous); skin colour has just two groups (discontinuous).', 'gold');
     this.st.done(4); this.checkCross();
   }
-  checkCross() { if ([0, 1, 2, 3, 4, 5].every((i) => this.st.isDone(i))) this.lab.goal('cross'); }
+  checkCross() { this.st.check(); }
 
   // ======================================================== selection
   tab_selection() {
@@ -163,5 +163,5 @@ export default class Genetics extends Experiment {
     if (this.runs.bac >= 5 && this.antibiotic) { this.st.done(2); if (this.runs.bac === 5) this.ui.note(`With the antibiotic, resistant bacteria rose to **${pct.toFixed(0)}%** — natural selection in a few days.`, 'gold'); }
     this.checkSel();
   }
-  checkSel() { if ([0, 1, 2, 3].every((i) => this.st.isDone(i))) this.lab.goal('selection'); }
+  checkSel() { this.st.check(); }
 }

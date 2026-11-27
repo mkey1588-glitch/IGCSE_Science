@@ -320,6 +320,6 @@ export default class Salts extends Experiment {
     this.checkTab('precip', this.st3, 4);
   }
 
-  checkTab(id, st, n) { if (Array.from({ length: n }, (_, i) => i).every((i) => st.isDone(i))) this.lab.goal(id); }
+  checkTab(id, st) { st.check(); }
   dispose() { super.dispose(); }
 }

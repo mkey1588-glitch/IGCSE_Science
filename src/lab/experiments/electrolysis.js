@@ -42,7 +42,7 @@ export default class Electrolysis extends Experiment {
     this.ions = []; const ig = new THREE.SphereGeometry(0.0045, 8, 6);
     for (let i = 0; i < 36; i++) { const cat = i % 2 === 0; const m = new THREE.Mesh(ig, new THREE.MeshStandardMaterial({ color: '#fff', emissive: '#000', emissiveIntensity: 0.4 })); m.userData = { cat, x: (Math.random() - 0.5) * 0.09, y: 0.02 + Math.random() * 0.05, z: (Math.random() - 0.5) * 0.06 }; this.bk.add(m); this.ions.push(m); }
     const ui = this.ui;
-    this.st = ui.steps(['Electrolyse **molten lead(II) bromide** (heat it first!)', 'Electrolyse **concentrated brine** and test both gases', 'Electrolyse **dilute sulfuric acid**', '(S) Electrolyse **copper(II) sulfate** with copper electrodes', 'Answer the analysis questions']);
+    this.st = ui.steps(['Electrolyse **molten lead(II) bromide** (heat it first!)', 'Electrolyse **concentrated brine** and test both gases', 'Electrolyse **dilute sulfuric acid**', { t: '(S) Electrolyse **copper(II) sulfate** with copper electrodes', o: ['C4.1.5'] }, 'Answer the analysis questions']);
     const sec = ui.section('Cell');
     ui.select({ label: 'Electrolyte', options: Object.entries(EL).map(([k, v]) => [k, v.name]), value: this.key, parent: sec, onChange: (v) => this.setEl(v) });
     ui.slider({ label: 'Supply voltage', min: 0, max: 12, step: 1, value: this.V, unit: 'V', parent: sec, onInput: (v) => { this.V = v; this.ps.set(v); } });
@@ -121,7 +121,7 @@ export default class Electrolysis extends Experiment {
       }
     } else if (this.on && EL[this.key].molten && this.burner.state === 'off' && !this._warned) { this._warned = true; this.ui.note('No current: solid lead(II) bromide does not conduct — its ions cannot move.', 'warn'); }
   }
-  checkTab() { if ([0, 1, 2, 3, 4].every((i) => this.st.isDone(i))) this.lab.goal('cell'); }
+  checkTab() { this.st.check(); }
 
   tab_fuelcell() {
     const Y = this.Y;
@@ -162,7 +162,7 @@ export default class Electrolysis extends Experiment {
       if (P > 2 && !this.st2.isDone(0)) { this.st2.done(0); this.ui.note('Hydrogen and oxygen combine in the cell: chemical energy → electrical energy. The fan spins!', 'gold'); }
     });
   }
-  check2() { if ([0, 1, 2].every((i) => this.st2.isDone(i))) this.lab.goal('fuelcell'); }
+  check2() { this.st2.check(); }
   dispose() { super.dispose(); }
 }
 void M;

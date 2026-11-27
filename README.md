@@ -44,7 +44,19 @@ For a claude.ai Artifact, publish `dist/catalyst.html` as the page with every fi
 ```bash
 node tools/verify-curriculum.mjs <outline.txt>   # 650/650 objectives, tiers match the official syllabus
 node tools/check-links.mjs                       # 215 links, every sub-topic linked
+npm test                                         # component tests: the real game modules in a simulated page (Vitest + happy-dom)
+npm run test:browser                             # builds, then browser tests in Google Chrome (Playwright)
 ```
+
+The browser tests use the installed Google Chrome. To use Playwright's own browser instead, run `npx playwright install chromium` once and set `PW_CHANNEL=chromium`.
+
+## How progress is credited
+
+- **● discovered:** seen in a scan, quest, 3D model or lab.
+- **●● practised:** the experiment work for that objective, or one question on it answered right first time.
+- **●●● mastered:** a second, different question answered right, or a right answer backed by the experiment work.
+
+On the **Core** tier, Supplement steps, questions, lab tabs and quest steps are optional extras (the syllabus data decides which), and credit never spreads to Supplement objectives the learner did not do. Saves from earlier versions keep their quests, XP, links and achievements; an objective that was "mastered" after a single answer shows as practised until a second answer or lab work confirms it.
 
 Coverage at the time of writing: all 142 sub-topics appear in quests, in at least one lab or holo-model, and in at least two quiz questions.
 

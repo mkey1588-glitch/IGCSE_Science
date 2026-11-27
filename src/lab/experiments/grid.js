@@ -47,7 +47,7 @@ export default class Grid extends Experiment {
     for (const k of KEYS) this.rebuildSlot(k);
 
     const ui = this.ui;
-    this.st = ui.steps(['Run a day with **no blackouts**', 'Reach at least **60% renewable** electricity', 'Keep CO₂ under **500 tonnes per day** — all three at once', '(S) Compare transmission at **11 kV and 132 kV**', 'Answer the analysis questions']);
+    this.st = ui.steps(['Run a day with **no blackouts**', 'Reach at least **60% renewable** electricity', 'Keep CO₂ under **500 tonnes per day** — all three at once', { t: '(S) Compare transmission at **11 kV and 132 kV**', o: ['P4.5.6.5', 'P4.5.6.6'] }, 'Answer the analysis questions']);
     const sec = ui.section('Power stations (units)');
     this.ctl = h('div'); sec.append(this.ctl); this.drawCtl();
     ui.buttons([{ label: '▶ Run a 24-hour day', kind: 'primary', onClick: () => this.runDay() }], sec);
@@ -164,5 +164,5 @@ export default class Grid extends Experiment {
     ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.setLineDash([8, 5]); ctx.beginPath(); for (let hr = 0; hr <= 24; hr += 0.25) { const y = py(demand(hr)); if (hr === 0) ctx.moveTo(px(hr), y); else ctx.lineTo(px(hr), y); } ctx.stroke(); ctx.setLineDash([]);
     ctx.fillStyle = '#fff'; ctx.fillText('demand', W - 90, 24);
   }
-  check() { if ([0, 1, 2, 3, 4].every((i) => this.st.isDone(i))) this.lab.complete(); }
+  check() { this.st.check(); }
 }

@@ -56,7 +56,7 @@ export default class Waves extends Experiment {
     this.rl = ruler(0.3); this.rl.rotation.x = 0; this.lab.add(this.rl, 0.02, Y + 0.046, D / 2 + 0.03); this.rl.visible = true;
     this.lab.label(tank, 'Ripple tank (seen from above)', { y: 0.09, x: -0.18 });
     const ui = this.ui;
-    this.st = ui.steps(['Make straight waves, **freeze** them and measure the wavelength', 'Show **reflection** from a barrier', 'Show **refraction** as waves enter shallow water', '(S) Show **diffraction** through a narrow and a wide gap', 'Answer the analysis questions']);
+    this.st = ui.steps(['Make straight waves, **freeze** them and measure the wavelength', 'Show **reflection** from a barrier', 'Show **refraction** as waves enter shallow water', { t: '(S) Show **diffraction** through a narrow and a wide gap', o: ['P3.1.8', 'P3.1.9'] }, 'Answer the analysis questions']);
     const sec = ui.section('Wave generator');
     ui.seg({ label: 'Dipper', options: [['line', 'Straight bar (plane waves)'], ['point', 'Ball (circular waves)']], value: 'line', parent: sec, onChange: (v) => { this.src = v; this.reset(); } });
     ui.slider({ label: 'Frequency', min: 2, max: 8, step: 1, value: this.f, unit: 'Hz', parent: sec, onInput: (v) => { this.f = v; this.reset(); } });
@@ -139,7 +139,7 @@ export default class Waves extends Experiment {
   }
   check() {
     const b = this.qs?.querySelector('.aq'); void b;
-    if ([0, 1, 2, 3, 4].every((i) => this.st.isDone(i))) this.lab.complete();
+    this.st.check();
   }
 }
 void h; void M;

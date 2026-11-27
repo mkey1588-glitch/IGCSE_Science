@@ -180,7 +180,7 @@ export default class Microscope extends Experiment {
     this.draw();
     this.tryComplete();
   }
-  tryComplete() { if ([0, 1, 2, 3, 4, 5].every((i) => this.st.isDone(i))) this.lab.complete(); }
+  tryComplete() { this.st.check(); }
 
   // ---------------------------------------------------------------- drawing
   zoom() { return this.spec === 'bacteria' ? 1 : this.obj / 40; }

@@ -196,8 +196,8 @@ export const QUESTS = [
   steps: [
     { type: 'scan', poi: 'pow_turbine', text: 'Scan a **wind turbine**.' },
     { type: 'exp', id: 'grid', text: 'Balance supply and demand in the **Island Power Grid** simulator.' },
-    { type: 'exp', id: 'electromag', goal: 'generator', text: 'Spin a coil in the **Electromagnetism Lab → Generator**.' },
-    { type: 'exp', id: 'electromag', goal: 'transformer', text: 'Step voltages up and down in the **Transformer** bench.' },
+    { type: 'exp', id: 'electromag', goal: 'generator', o: ['P4.5.1', 'P4.5.2'], text: 'Spin a coil in the **Electromagnetism Lab → Generator**.' },
+    { type: 'exp', id: 'electromag', goal: 'transformer', o: ['P4.5.6'], text: 'Step voltages up and down in the **Transformer** bench.' },
     { type: 'chain', chain: C('From wind to kettle', 'Order the journey from a breezy hillside to boiling water in town.', [
       ['The Sun heats land and sea unevenly, creating wind', 'P1.6.3'], ['Moving air turns the blades — kinetic energy', 'P1.6.1'],
       ['A coil spins in a magnetic field, inducing an alternating e.m.f.', 'P4.5.2'], ['A step-up transformer raises the voltage, lowering the current', 'P4.5.6'],
@@ -215,7 +215,7 @@ export const QUESTS = [
   steps: [
     { type: 'scan', poi: 'lab_ferris', text: 'Scan the **Ferris Wheel**.' },
     { type: 'exp', id: 'electromag', goal: 'magnets', text: 'Map magnetic fields in **Electromagnetism → Magnets**.' },
-    { type: 'exp', id: 'electromag', goal: 'motor', text: 'Get a **d.c. motor** spinning.' },
+    { type: 'exp', id: 'electromag', goal: 'motor', o: ['P4.5.4', 'P4.5.5'], text: 'Get a **d.c. motor** spinning.' },
     { type: 'quiz', subs: ['P4.1', 'P4.5.3', 'P4.5.4', 'P4.5.5'], n: 4, text: 'Answer **4 questions** on magnetism and motors.' },
     choice('kofi', 'Diagnose the motor for **Kofi**.', [['kofi', 'The coil twitches but will not keep turning. Why?']], [
       ok('The split-ring commutator is worn — it must reverse the current every half turn to keep the coil rotating one way.', 'Exactly the fault!'),

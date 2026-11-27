@@ -77,6 +77,6 @@ export default class Yeast extends Experiment {
     this.lime.setColor('#f8fafc', 3); this.lime.setOpacity(0.95);
     setTimeout(() => { this.limeBub.setRate(0); this.ui.note('The limewater turned **milky** — the gas is **carbon dioxide**.', 'gold'); this.st.done(3); this.check(); }, 2500);
   }
-  check() { if ([0, 1, 2, 3, 4].every((i) => this.st.isDone(i))) this.lab.complete(); }
+  check() { this.st.check(); }
   update(dt) { this.bub.update(dt); this.limeBub.update(dt, this.lime.surfaceY()); this.flask.update(dt); this.lime.update(dt); }
 }

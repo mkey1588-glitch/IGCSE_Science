@@ -107,7 +107,7 @@ export default class Atoms extends Experiment {
     if ([2, 10, 18].includes(this.p) && this.e === this.p && stable.includes(A)) { if (!this.st.isDone(4)) { this.st.done(4); this.ui.note(`${name}: a full outer shell — that is why noble gases are unreactive.`, 'gold'); } }
     this.check();
   }
-  check() { if ([0, 1, 2, 3, 4, 5].every((i) => this.st.isDone(i))) this.lab.complete(); }
+  check() { this.st.check(); }
   update(dt, t) {
     this.nuc.rotation.y += dt * 0.6; this.nuc.rotation.x = Math.sin(t * 0.4) * 0.3;
     (this.shells || []).forEach((s) => { s.children.forEach((c, i) => { if (i === 0) return; }); s.rotation.y += dt * s.userData.speed; });

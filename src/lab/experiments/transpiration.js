@@ -94,7 +94,7 @@ export default class Transpiration extends Experiment {
       this.check();
     });
   }
-  check() { if ([0, 1, 2, 3, 4].every((i) => this.st.isDone(i))) this.lab.complete(); }
+  check() { this.st.check(); }
   update(dt) {
     this.blades.rotation.x += dt * [0, 8, 20][this.wind];
     const loss = this.rate();
