@@ -68,7 +68,9 @@ export function runQuiz(ui, { title = 'Challenge', subs, n = 3, pass = null, int
           const ok = Math.abs(v - q.ans) <= Math.abs(q.ans) * tol + 1e-9 + (q.abs || 0);
           answered(ok, `${+q.ans.toPrecision(4)} ${q.unit || ''}`);
         };
-        inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+        // cancel the key: submitting moves focus to Next, and the browser would otherwise deliver this
+        // Enter's keypress to it too, skipping straight past the feedback
+        inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
         card.append(h('div', { class: 'num' }, inp, q.unit ? h('span', { class: 'muted' }, q.unit) : null, go));
         setTimeout(() => inp.focus(), 60);
       }

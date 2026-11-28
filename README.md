@@ -53,8 +53,14 @@ The browser tests use the installed Google Chrome. To use Playwright's own brows
 ## How progress is credited
 
 - **● discovered:** seen in a scan, quest, 3D model or lab.
-- **●● practised:** the experiment work for that objective, or one question on it answered right first time.
-- **●●● mastered:** a second, different question answered right, or a right answer backed by the experiment work.
+- **●● practised:** the hands-on lab work for that objective, or one question on it answered right first time.
+- **●●● mastered:** a second, different question answered right, or a right answer backed by the hands-on work.
+
+Each piece of work counts once:
+
+- **Practical work** comes from what you do at the bench, never from answers. Each lab checklist lists the objectives its hands-on steps demonstrate (`src/lab/practical.js`); they are credited when those steps are done, in any order. Cell Explorer credits each observation as you make it.
+- **Answers** are keyed by the question, so the same question answered again is not new evidence. A generated question's identity comes from its wording and numbers, so a redrawn copy is the same question.
+- **Trials:** comparisons only use runs that differ in the one variable being tested, and an answer read from one run's graphs is shown as that run's history when you start another.
 
 On the **Core** tier, Supplement steps, questions, lab tabs and quest steps are optional extras (the syllabus data decides which), and credit never spreads to Supplement objectives the learner did not do. Saves from earlier versions keep their quests, XP, links and achievements; an objective that was "mastered" after a single answer shows as practised until a second answer or lab work confirms it.
 
@@ -62,4 +68,4 @@ Coverage at the time of writing: all 142 sub-topics appear in quests, in at leas
 
 ## Controls
 
-WASD / click to move, drag to look, E to interact, Q quest log, C codex, K constellation. In labs: drag to orbit, click apparatus, use the side panel.
+WASD / click to move, drag to look, E to interact, J quest log, C codex, K constellation. In labs: drag to orbit, click apparatus, use the side panel. In Cell Explorer's eyepiece, click a structure to identify it, or Tab to **Identify at crosshair**, move the crosshair with the arrow keys (Shift moves further) and press Enter.

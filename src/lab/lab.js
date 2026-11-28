@@ -216,9 +216,7 @@ export class LabView {
     bus.emit('exp:goal', m.id, name);
     if (m.tabs && m.tabs.includes(name)) {
       this.ui.markTab(name);
-      // practical credit for what this tab's required analysis covers (or the tab's declared objectives)
-      const practised = this.ui.practiceIds.size ? [...this.ui.practiceIds] : this.active?.tabObjectives?.[name];
-      if (practised && m.kind !== 'holo') raise(practised, 2, 'lab');
+      // no practical credit here: the tab's checklist credited its hands-on steps as they were done
       addXP(40, 'lab');
       game.ui.toast(m.icon, `<b>${m.title}</b> — “${(this.active?.tabLabels || []).find((t) => t[0] === name)?.[1] || name}” complete!`, 'good');
       audio.success();
@@ -234,16 +232,15 @@ export class LabView {
     const rec = (bag[m.id] = bag[m.id] || {}); rec.goals = rec.goals || {};
     const first = !rec.done;
     rec.done = true; rec.goals.complete = true;
-    // Credit what the work covered. A model is explored (seen); an experiment's practical work counts
-    // for the objectives its required analysis covers. Tabbed experiments credited each tab as it finished.
+    // A model is explored (seen). An experiment's practical work was credited by its checklist as the
+    // hands-on steps were done (practical.js), and its answers as they were given, so completing adds nothing.
     if (m.kind === 'holo') raise(m.objectives, 1, 'holo');
-    else if (!m.tabs) raise(this.ui.practiceIds.size ? [...this.ui.practiceIds] : m.objectives, 2, 'lab');
     if (first) { addXP(m.kind === 'holo' ? 50 : 80, 'lab'); state.stats.experiments++; }
     save();
     checkAchievements();
     bus.emit('exp:goal', m.id, 'complete');
     if (m.kind === 'holo') bus.emit('holo:done', m.id);
-    if (first) { audio.complete(); game.ui.toast(m.icon, `<b>${m.title} complete!</b> Objectives practised: ${m.objectives.join(', ')}`, 'gold'); this.ui.note(`🏅 <b>${m.kind === 'holo' ? 'Model' : 'Experiment'} complete.</b> You can keep exploring, or return to the island.`, 'gold'); }
+    if (first) { audio.complete(); game.ui.toast(m.icon, `<b>${m.title} complete!</b> Your practical work and answers are saved as evidence in the Codex.`, 'gold'); this.ui.note(`🏅 <b>${m.kind === 'holo' ? 'Model' : 'Experiment'} complete.</b> You can keep exploring, or return to the island.`, 'gold'); }
   }
 
   // ------------------------------------------------------------ input

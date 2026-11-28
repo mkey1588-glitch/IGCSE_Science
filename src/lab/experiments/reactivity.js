@@ -161,7 +161,7 @@ export default class Reactivity extends Experiment {
     DISP_M.forEach((m, i) => { const anchor = new THREE.Object3D(); anchor.position.set(-0.115, 0.012, -0.0525 + i * 0.035); tile.add(anchor); this.lab.label(anchor, NAMES[m], { y: 0, cls: 'dimlab' }); });
     DISP_M.forEach((m, i) => { const anchor = new THREE.Object3D(); anchor.position.set(-0.0525 + i * 0.035, 0.012, -0.1); tile.add(anchor); this.lab.label(anchor, SALT[m][0].replace(' sulfate', '').replace('(II)', '') + ' salt', { y: 0, cls: 'dimlab' }); });
     const ui = this.ui;
-    this.std = ui.steps(['Add each metal to each **salt solution** (12 different pairs)', 'Use the number of reactions to **rank the four metals**', { t: '(S) Write the **ionic equation** and spot oxidation and reduction', o: ['C6.3.5', 'C6.3.6'] }, 'Answer the analysis questions']);
+    this.std = ui.steps(['Add each metal to each **salt solution** (12 different pairs)', 'Use the number of reactions to **rank the four metals**', { t: '(S) Write the **ionic equation** and spot oxidation and reduction', o: ['C6.3.5', 'C6.3.6'], q: true }, 'Answer the analysis questions']);
     const sec = ui.section('Spotting tile');
     ui.text('Rows = metal added. Columns = salt solution. Click a well to drop in the metal. Skip the diagonal — a metal in its own salt shows nothing.', sec);
     ui.buttons([{ label: '⚡ Fill every well', onClick: () => this.wells.forEach((c) => c.m !== c.s && this.testWell(c, true)) }], sec);

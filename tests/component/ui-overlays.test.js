@@ -54,6 +54,30 @@ describe('dialogue choices with the keyboard', () => {
   });
 });
 
+describe('quiz number answers with the keyboard', () => {
+  it('Enter submits the answer and the feedback stays on screen: the same key press does not also press Next', async () => {
+    const { ctx, ui } = await realUI({ tier: 'extended' });
+    const { runQuiz } = await import('../../src/ui/quiz.js');
+    for (let i = 0; i < 200; i++) { // draw until a question with a typed answer comes up
+      runQuiz(ui, { title: 'Practice · P1.4 Density', subs: ['P1.4'], n: 1 });
+      if (document.querySelector('.quiz input')) break;
+      ui.closeAllModals();
+    }
+    const card = document.querySelector('.quiz');
+    const inp = card.querySelector('input');
+    const m = card.querySelector('.q').textContent.match(/mass of (\d+) g and displaces (\d+) cm³/);
+    inp.value = String(+m[1] / +m[2]);
+    const ev = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true, cancelable: true });
+    inp.dispatchEvent(ev);
+    // a cancelled keydown stops the browser sending this key's keypress on to the Next button focused meanwhile
+    expect(ev.defaultPrevented).toBe(true);
+    expect(card.querySelector('.expl').classList.contains('hidden')).toBe(false);
+    expect(card.querySelector('.expl').textContent).toMatch(/Correct/);
+    expect(document.activeElement.textContent).toMatch(/See results/);
+    void ctx;
+  });
+});
+
 describe('overlays restore focus', () => {
   it('a modal takes focus and gives it back when closed', async () => {
     const { ui } = await realUI();

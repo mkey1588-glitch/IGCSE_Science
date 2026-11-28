@@ -229,20 +229,21 @@ export function checkAchievements() {
   }
 }
 
-let anonymous = 0;
 /**
  * Record one answer as evidence for the objectives the question tests. `correct` means right first
- * time. `key` names the question, so answering the same question again is not new evidence.
- * A question tagged only with a sub-topic cannot say which objective it tested, so it counts as "seen".
+ * time. `key` is the question's stable identity (generated questions get one from their wording), so
+ * answering the same question again, or a redrawn copy of it, is not new evidence. An answer without
+ * a key cannot be told apart from a repeat, and a question tagged only with a sub-topic cannot say
+ * which objective it tested: both count as "seen" only.
  */
-export function recordAnswer(correct, ids, { key = `answer-${++anonymous}`, source = 'quiz' } = {}) {
+export function recordAnswer(correct, ids, { key = null, source = 'quiz' } = {}) {
   const s = state.stats;
   s.answered++;
   if (correct) { s.correct++; s.streak++; s.best = Math.max(s.best, s.streak); addXP(10, 'answer'); }
   else s.streak = 0;
   const objectives = (ids || []).filter((id) => OBJ[id]);
   const broad = (ids || []).filter((id) => !OBJ[id]);
-  if (objectives.length) addEvidence(objectives, correct ? 'c' : 'w', source, key);
+  if (objectives.length) addEvidence(objectives, !key ? 'v' : correct ? 'c' : 'w', source, key);
   if (broad.length) addEvidence(creditTargets(broad), 'v', source);
   checkAchievements();
   save();

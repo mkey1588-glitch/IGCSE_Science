@@ -13,7 +13,7 @@ export default class Photosynthesis extends Experiment {
     super(...a);
     this.scenario = 'Ravi’s greenhouse tomatoes are pale and slow. Pondweed gives off bubbles of oxygen as it photosynthesises — use them to find what limits growth.';
     this.view = { pos: [0.02, 1.52, 1.28], target: [0.02, 1.0, 0] };
-    this.d = 15; this.C = 1; this.T = 25; this.distances = new Set(); this.co2ByT = {}; this.counting = null;
+    this.d = 15; this.C = 1; this.T = 25; this.trials = []; this.counting = null;
   }
   /** Bubble rate for a set of conditions (defaults to the current control settings). */
   rate({ d = this.d, C = this.C, T = this.T } = {}) {
@@ -55,7 +55,7 @@ export default class Photosynthesis extends Experiment {
     });
     this.lab.label(this.leaves[1].m, 'Leaves: variegated · foil strip · no CO₂', { y: 0.05 });
     const ui = this.ui;
-    this.st = ui.steps(['Count bubbles with the lamp **close** to the pondweed', 'Count at **four or more** lamp distances', 'Change the **CO₂** (sodium hydrogencarbonate) and repeat close up', 'Run the **hydrogencarbonate indicator** test', 'Do the **leaf starch** test', 'Answer the analysis questions']);
+    this.st = ui.steps(['Count bubbles with the lamp **close** to the pondweed', 'Count at **four or more** lamp distances (same CO₂, 25 °C)', 'Change only the **CO₂** (sodium hydrogencarbonate): count again at the **same lamp distance and temperature**', 'Run the **hydrogencarbonate indicator** test', 'Do the **leaf starch** test', 'Answer the analysis questions']);
     const sec = ui.section('Limiting factors');
     // changes made while a count runs apply to the next count; the controls are locked meanwhile
     this.dS = ui.slider({ label: 'Lamp distance', min: 10, max: 50, step: 1, value: this.d, unit: 'cm', parent: sec, onInput: (v) => { this.d = v; this.lamp.position.x = -v * 0.008 - 0.02; this.applyLight(); } });
@@ -102,12 +102,27 @@ export default class Photosynthesis extends Experiment {
         this.graph.series.forEach((s) => s.data.sort((a, b) => a[0] - b[0])); this.graph.draw();
       }
       this.ui.note(`d = ${trial.d} cm, CO₂ ${CO2[trial.C]}, ${trial.T} °C → **${n} bubbles/min** (limited by ${trial.limit}).${trial.T === GRAPH_T ? '' : ` Not plotted: the graph compares counts at ${GRAPH_T} °C.`}`);
-      if (trial.d <= 12) this.st.done(0);
-      if (trial.C === 1 && trial.T === GRAPH_T) this.distances.add(trial.d);
-      if (this.distances.size >= 4) this.st.done(1);
-      if (trial.d <= 12) (this.co2ByT[trial.T] ||= new Set()).add(trial.C); // CO₂ levels compared close up, at one temperature
-      if (Object.values(this.co2ByT).some((s) => s.size >= 2)) this.st.done(2);
+      trial.n = n;
+      this.trials.push(trial);
+      this.compare(trial);
     });
+  }
+  /**
+   * Comparisons use only counts that differ in the one variable being investigated. Lamp distances are compared
+   * at one CO₂ level, at the graph temperature; CO₂ levels are compared at one lamp distance and temperature.
+   */
+  compare(trial) {
+    if (trial.d <= 12) this.st.done(0);
+    const atGraphT = this.trials.filter((t) => t.T === GRAPH_T && t.C === trial.C);
+    if (new Set(atGraphT.map((t) => t.d)).size >= 4) this.st.done(1);
+    const pair = this.trials.find((t) => t !== trial && t.d === trial.d && t.T === trial.T && t.C !== trial.C);
+    if (pair && !this.st.isDone(2)) {
+      const [lo, hi] = [pair, trial].sort((a, b) => a.C - b.C);
+      this.st.done(2);
+      this.ui.note(`Fair CO₂ comparison at ${trial.d} cm and ${trial.T} °C: ${CO2[lo.C]} CO₂ → ${lo.n}, ${CO2[hi.C]} CO₂ → ${hi.n} bubbles/min.${trial.limit === 'light intensity' ? ' Light was the limiting factor here, so extra CO₂ made little difference.' : ''}`, 'gold');
+    } else if (!this.st.isDone(2) && this.trials.some((t) => t !== trial && t.C !== trial.C)) {
+      this.ui.note('Not a fair CO₂ comparison yet: the lamp distance or temperature changed too. Count again at the **same lamp distance and temperature** as an earlier count, changing only the CO₂.', 'warn');
+    }
   }
   runIndicator() {
     const target = { light: '#7e22ce', dark: '#facc15', control: '#dc2626' };

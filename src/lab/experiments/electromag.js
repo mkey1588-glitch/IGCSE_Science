@@ -163,7 +163,7 @@ export default class Electromag extends Experiment {
     this.lab.label(this.rotor, 'Coil on an axle · split-ring commutator + brushes', { y: 0.12 });
     this.fArrows = [0, 1].map(() => { const g = new THREE.Group(); const sh = mesh(new THREE.CylinderGeometry(0.003, 0.003, 0.05, 8), new THREE.MeshBasicMaterial({ color: '#22c55e' })); sh.position.y = 0.025; g.add(sh); const hd = mesh(new THREE.ConeGeometry(0.008, 0.016, 10), new THREE.MeshBasicMaterial({ color: '#22c55e' })); hd.position.y = 0.055; g.add(hd); this.rotor.add(g); return g; });
     const ui = this.ui;
-    this.stO = ui.steps(['Switch on the **d.c. motor**', 'Make it spin **faster** (three ways)', 'Make it spin the **other way**', 'Explain the **split-ring commutator**', 'Answer the analysis questions']);
+    this.stO = ui.steps(['Switch on the **d.c. motor**', 'Make it spin **faster** (three ways)', 'Make it spin the **other way**', { t: 'Explain the **split-ring commutator**', q: true }, 'Answer the analysis questions']);
     const sec = ui.section('d.c. motor');
     ui.slider({ label: 'Current', min: 0, max: 3, step: 0.5, value: this.mo.I, unit: 'A', parent: sec, onInput: (v) => { this.mo.I = v; this.mo.runs.add(`I${v}`); this.moCheck(); } });
     ui.seg({ label: 'Magnets', options: [[1, 'Normal'], [2, 'Stronger']], value: 1, parent: sec, onChange: (v) => { this.mo.B = +v; this.mo.runs.add(`B${v}`); this.moCheck(); } });

@@ -457,6 +457,23 @@ button:disabled { cursor: not-allowed; }
 .aq-opt { font-size: .78em; color: var(--dim); margin-bottom: 6px; display: flex; gap: 6px; align-items: center; }
 .warn-text { color: #fbbf24; }
 
+/* ---------- microscope eyepiece (Cell Explorer) ---------- */
+.eyepiece { position: absolute; left: max(24px, calc(50vw - 640px)); top: 50%; transform: translateY(-46%); width: min(40vw, 46vh); height: min(40vw, 46vh); border-radius: 50%;
+  box-shadow: 0 0 0 10px #0b0f18, 0 0 0 12px rgba(255,255,255,.12), 0 30px 90px rgba(0,0,0,.7); background: #000; pointer-events: auto; }
+/* the keyboard crosshair's control has focus: the eyepiece it steers is outlined too */
+.eyepiece.aiming { box-shadow: 0 0 0 10px #0b0f18, 0 0 0 13px var(--accent), 0 0 26px 14px rgba(142,162,255,.35), 0 30px 90px rgba(0,0,0,.7); }
+.ep-canvas { width: 100%; height: 100%; border-radius: 50%; cursor: crosshair; display: block; touch-action: none; }
+.ep-title { position: absolute; top: -30px; left: 0; right: 0; text-align: center; font-weight: 700; font-size: 13px; text-shadow: 0 1px 4px #000; }
+.ep-mag { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); }
+.ep-keys { display: flex; gap: 10px; align-items: flex-start; margin-top: 10px; }
+.ep-keys .ep-aim { flex: none; }
+.ep-keys .muted { font-size: .8em; line-height: 1.45; }
+.ep-status { font-size: .86em; margin-top: 6px; min-height: 1.3em; color: var(--gold); }
+/* narrow screens: the panel fills the bottom of the screen, so the eyepiece sits centred above it */
+@media (max-width: 900px) {
+  .eyepiece { left: 50%; top: 100px; transform: translateX(-50%); width: max(140px, min(84vw, calc(54vh - 116px))); height: max(140px, min(84vw, calc(54vh - 116px))); }
+}
+
 /* ---------- constellation controls on every screen size ---------- */
 .cs-exit { position: absolute; top: 16px; right: 16px; pointer-events: auto; z-index: 2; white-space: nowrap; }
 .cs-top { right: 200px; flex-wrap: wrap; }

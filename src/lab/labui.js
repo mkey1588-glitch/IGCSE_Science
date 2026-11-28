@@ -1,8 +1,9 @@
 import { h, clear, rich, shuffle } from '../core/util.js';
 import { audio } from '../core/audio.js';
-import { recordAnswer, requiredFor, creditTargets } from '../core/state.js';
+import { recordAnswer, requiredFor, raise, tierOK } from '../core/state.js';
 import { SUBJECTS, SUB } from '../data/curriculum.js';
 import { Graph } from './graph.js';
+import { practicalFor } from './practical.js';
 
 /**
  * Builds the side panel for a lab/holo module. Every control helper returns a
@@ -15,14 +16,14 @@ export class LabUI {
     root.append(this.el);
     /** What a checklist does once its required steps are done; the experiment sets it (complete, or finish this tab). */
     this.stepsTarget = null;
-    /** Objectives the current tab's required analysis covers: credited as practical work when that work is complete. */
-    this.practiceIds = new Set();
-    this.qsets = [];
+    /** The open tab (null for an experiment without tabs): it picks the checklist's practical objectives. */
+    this.tab = null;
+    this.qsets = []; this.checklists = [];
   }
 
   mount(meta, { onExit, onReset, tabs, activeTab, onTab, done = {}, scenario, goalText } = {}) {
     clear(this.el); this.el.classList.remove('hidden');
-    this.meta = meta; this.qsets = []; this.practiceIds = new Set();
+    this.meta = meta; this.qsets = []; this.checklists = []; this.trialLabel = null; this.tab = null;
     const S = SUBJECTS[meta.subject];
     this.top = h('div', { class: 'lab-top glass' },
       h('div', { style: { fontSize: '22px' }, 'aria-hidden': 'true' }, meta.icon),
@@ -58,7 +59,7 @@ export class LabUI {
   setTabActive(id) { this.tabsEl?.querySelectorAll('.tab').forEach((t) => { const on = t.dataset.id === id; t.classList.toggle('on', on); t.setAttribute('aria-pressed', String(on)); }); }
   markTab(id) { const t = this.tabsEl?.querySelector(`.tab[data-id="${id}"]`); if (t && !t.textContent.startsWith('✓')) t.textContent = '✓ ' + t.textContent; }
   hide() { this.el.classList.add('hidden'); clear(this.el); }
-  reset() { clear(this.body); this._notes = null; this.practiceIds = new Set(); }
+  reset() { clear(this.body); this._notes = null; this.trialLabel = null; }
 
   // ------------------------------------------------------------ layout
   section(title, parent = this.body) {
@@ -74,35 +75,51 @@ export class LabUI {
   goal(text) { if (!text) { this.goalEl.classList.add('hidden'); return; } this.goalEl.classList.remove('hidden'); this.goalEl.innerHTML = `<div class="gt">◆ Quest objective</div>${rich(text)}`; }
 
   /**
-   * Procedure checklist. Items are 'text' or { t: 'text', o: [objective ids] }. A step whose objectives
+   * Procedure checklist. Items are 'text' or { t: 'text', o: [objective ids], q: true }. A step whose objectives
    * are Supplement is an optional extra on the Core tier. Every done(i) runs one shared check, and the
    * checklist's target (complete the experiment, or finish this tab) runs once, when every required
    * step is done, whatever order the steps were done in.
+   *
+   * Practical evidence comes from the hands-on steps, never from answers. A step ticked by answering the
+   * analysis questions ("Answer the analysis questions", or flagged `q: true`) is not practical work. When
+   * every required hands-on step is done, the checklist's practical objectives (practical.js) are credited;
+   * a hands-on step that names its own objectives (`o`) is credited for them when it is done.
    */
   steps(list, { onComplete = this.stepsTarget, parent } = {}) {
     const sec = this.section('Procedure', parent);
     const box = h('div', { class: 'lp-steps' });
     const items = list.map((it) => (typeof it === 'string' ? { t: it, o: [] } : { o: [], ...it }));
     const required = items.map((it) => requiredFor(it.o));
+    const byAnswer = items.map((it) => !!it.q || /analysis questions/i.test(it.t));
+    const practical = practicalFor(this.meta?.id, this.tab);
     const els = items.map((it, i) => h('div', { class: `lp-step${required[i] ? '' : ' optional'}` }, h('span', { class: 'ck' }), h('span', { html: rich(it.t) }), required[i] ? null : h('span', { class: 'chip S opt' }, 'optional')));
     box.append(...els); sec.append(box);
     const doneSet = new Set();
-    let fired = false;
+    let fired = false, practised = false;
     const refresh = () => { let cur = -1; els.forEach((el, i) => { const d = doneSet.has(i); el.classList.toggle('done', d); el.querySelector('.ck').textContent = d ? '✓' : ''; if (!d && cur < 0 && required[i]) cur = i; el.classList.toggle('cur', i === cur); }); };
     const all = () => required.every((r, i) => !r || doneSet.has(i));
     const check = () => { if (!fired && all()) { fired = true; onComplete?.(); } return fired; };
+    const handsOnDone = () => items.every((_, i) => byAnswer[i] || !required[i] || doneSet.has(i)) && items.some((_, i) => !byAnswer[i] && doneSet.has(i));
+    const credit = (i) => {
+      if (i != null && !byAnswer[i] && items[i].o.length) raise(items[i].o, 2, 'lab');
+      if (!practised && practical.length && handsOnDone()) { practised = true; const ids = practical.filter(tierOK); if (ids.length) raise(ids, 2, 'lab'); }
+    };
     /** The step asks only for Supplement work on this tier: it becomes an optional extra instead of being ticked. */
     const waive = (i) => {
       if (!required[i] || doneSet.has(i)) return;
       required[i] = false; els[i].classList.add('optional');
       if (!els[i].querySelector('.opt')) els[i].append(h('span', { class: 'chip S opt' }, 'optional'));
       refresh();
+      credit(null);
     };
     refresh();
-    return {
-      done: (i) => { if (this.waiving) waive(i); else if (!doneSet.has(i)) { doneSet.add(i); audio.clink(); refresh(); } check(); },
+    const handle = {
+      done: (i) => { if (this.waiving) waive(i); else if (!doneSet.has(i)) { doneSet.add(i); audio.clink(); refresh(); credit(i); } check(); },
       isDone: (i) => doneSet.has(i), isRequired: (i) => required[i], all, check, count: () => doneSet.size,
+      practised: () => practised, byAnswer: (i) => byAnswer[i], items: () => items.map((it) => it.t),
     };
+    this.checklists.push({ sec, handle });
+    return handle;
   }
 
   // ------------------------------------------------------------ controls
@@ -172,10 +189,23 @@ export class LabUI {
   }
 
   /**
+   * Start a new trial (a new run of the experiment). An answer read from the previous trial's data is
+   * no longer shown as the answer for this one: it moves to a history line, the box can be answered again
+   * from the new data, and the progress and evidence it earned are kept.
+   */
+  newTrial(label) {
+    const prev = this.trialLabel;
+    this.trialLabel = label;
+    for (const set of this.qsets) for (const rec of set.items) rec.rebind?.(prev);
+  }
+
+  /**
    * Analysis questions. list: [{ q, opts:[correct,...] } | { q, ans, tol, unit }], plus optional sub & o (objective numbers).
    * A question whose objectives are Supplement is an optional extra on the Core tier. onDone runs once,
-   * when every required question has been answered correctly. Answers are recorded as evidence;
-   * finishing the experiment is what credits the practical work.
+   * when every required question has been answered correctly. Answers are recorded as evidence, once per
+   * question; they never count as practical work (see steps()).
+   * `ans` may be a function of the data collected so far; it returns null when the current data cannot answer
+   * it, and `unavailable()` then says why. Such answers belong to the trial they were read from (newTrial).
    */
   questions(list, { sub, onDone, title = 'Analysis', parent = this.body } = {}) {
     const sec = this.section(title, parent);
@@ -188,46 +218,52 @@ export class LabUI {
       const ids = (item.o || []).map((n) => `${item.sub || sub}.${n}`);
       const tested = ids.length ? ids : [item.sub || sub];
       const required = requiredFor(ids);
-      const rec = { item, ids: tested, required, solved: false };
+      const rec = { item, ids: tested, required, solved: false, credited: false, tries: 0, answered: null };
       set.items.push(rec);
-      if (required) for (const id of creditTargets(tested)) this.practiceIds.add(id);
       const box = h('div', { class: `aq${required ? '' : ' optional'}` },
         required ? null : h('div', { class: 'aq-opt' }, h('span', { class: 'chip S' }, 'Supplement'), ' optional extra'),
         h('div', { class: 'qq', html: rich(item.q) }));
       const fb = h('div', { class: 'fb', role: 'status' });
       const key = `lab:${this.meta?.id || 'lab'}:${item.q}`;
-      const credit = (ok) => recordAnswer(ok, tested, { key, source: 'lab' });
-      const solve = () => {
-        rec.solved = true; box.classList.add('solved');
-        if (!required) for (const id of creditTargets(tested)) this.practiceIds.add(id);
-        check();
-      };
+      // first-time correctness is judged once per question: answering it again later is not new evidence
+      const credit = (ok) => { if (rec.credited) return; rec.credited = true; recordAnswer(ok, tested, { key, source: 'lab' }); };
+      const solve = () => { rec.solved = true; box.classList.add('solved'); check(); };
       if (item.opts) {
         const order = shuffle(item.opts.map((t, k) => ({ t, k })));
-        let tries = 0;
         order.forEach(({ t, k }) => {
           const b = h('button', { type: 'button', class: 'ao', html: rich(t), onClick: () => {
             if (box.classList.contains('solved')) return;
-            if (k === 0) { b.classList.add('right'); fb.innerHTML = '✅ ' + rich(item.e || 'Correct.'); audio.success(); credit(tries === 0); solve(); }
-            else { b.classList.add('wrong'); tries++; fb.innerHTML = '❌ ' + rich(item.hint || 'Not quite — look at your data again.'); audio.fail(); }
+            if (k === 0) { b.classList.add('right'); fb.innerHTML = '✅ ' + rich(item.e || 'Correct.'); audio.success(); credit(rec.tries === 0); solve(); }
+            else { b.classList.add('wrong'); rec.tries++; fb.innerHTML = '❌ ' + rich(item.hint || 'Not quite — look at your data again.'); audio.fail(); }
           } });
           box.append(b);
         });
       } else {
         const inp = h('input', { type: 'text', placeholder: item.unit ? `answer in ${item.unit}` : 'answer', inputmode: 'decimal', 'aria-label': 'Answer' });
-        let tries = 0;
+        const hist = h('div', { class: 'aq-hist' });
         const go = h('button', { type: 'button', class: 'btn small primary', onClick: () => {
           if (box.classList.contains('solved')) return;
           const v = parseFloat(String(inp.value).replace(/[^0-9eE+\-.]/g, ''));
           if (Number.isNaN(v)) return;
           const target = typeof item.ans === 'function' ? item.ans() : item.ans;
-          if (target == null) { fb.innerHTML = 'Collect your data first.'; return; }
+          if (target == null) { fb.innerHTML = rich(item.unavailable?.() || 'Collect your data first.'); return; }
           const ok = Math.abs(v - target) <= Math.abs(target) * (item.tol ?? 0.05) + (item.abs ?? 1e-9);
-          if (ok) { fb.innerHTML = '✅ ' + rich(item.e ? item.e.replace('{ans}', +target.toPrecision(3)) : 'Correct.'); audio.success(); credit(tries === 0); solve(); }
-          else { tries++; fb.innerHTML = '❌ ' + rich(tries > 1 && item.e ? 'Hint: ' + item.e.replace('{ans}', '?') : 'Check your calculation.'); audio.fail(); }
+          if (ok) {
+            fb.innerHTML = '✅ ' + rich(item.e ? item.e.replace('{ans}', +target.toPrecision(3)) : 'Correct.'); audio.success();
+            rec.answered = { trial: this.trialLabel, text: `${inp.value.trim()}${item.unit ? ' ' + item.unit : ''}` };
+            hist.textContent = '';
+            credit(rec.tries === 0); solve();
+          } else { rec.tries++; fb.innerHTML = '❌ ' + rich(rec.tries > 1 && item.e ? 'Hint: ' + item.e.replace('{ans}', '?') : 'Check your calculation.'); audio.fail(); }
         } }, 'Check');
-        inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') go.click(); });
-        box.append(h('div', { class: 'num' }, inp, item.unit ? h('span', { class: 'faint', style: { alignSelf: 'center' } }, item.unit) : null, go));
+        inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); go.click(); } });
+        box.append(h('div', { class: 'num' }, inp, item.unit ? h('span', { class: 'faint', style: { alignSelf: 'center' } }, item.unit) : null, go), hist);
+        if (typeof item.ans === 'function') {
+          // a new trial: what was shown for the old data becomes history, and the box is answerable again
+          rec.rebind = (prev) => {
+            if (rec.answered && rec.answered.trial === prev) hist.textContent = `${prev || 'Earlier run'} (an earlier run): ✅ ${rec.answered.text} was correct for that run. Read this run’s graphs to answer again.`;
+            box.classList.remove('solved'); fb.innerHTML = ''; inp.value = ''; rec.tries = 0;
+          };
+        }
       }
       box.append(fb);
       sec.append(box);

@@ -63,7 +63,7 @@ export default class Refinery extends Experiment {
     this.vp = Array.from({ length: N }, () => this.newVap());
     this._o = new THREE.Object3D();
     const ui = this.ui;
-    this.stD = ui.steps(['**Heat** the crude oil in the furnace', 'Collect and inspect **all eight fractions**', 'Match each fraction to its **use**', { t: '(S) Describe the **trends** up the column', o: ['C11.3.7'] }, 'Answer the analysis questions']);
+    this.stD = ui.steps(['**Heat** the crude oil in the furnace', 'Collect and inspect **all eight fractions**', 'Match each fraction to its **use**', { t: '(S) Describe the **trends** up the column', o: ['C11.3.7'], q: true }, 'Answer the analysis questions']);
     const sec = ui.section('Refinery');
     ui.buttons([{ label: '🔥 Heat crude oil', kind: 'primary', onClick: () => { this.d.on = true; audio.loop && (this.hum = this.hum || audio.loop('boil')); this.hum?.set(0.4); } }, { label: '⏹ Stop', onClick: () => { this.d.on = false; this.hum?.set(0); } }], sec);
     this.info = h('div', { class: 'muted', style: { fontSize: '.88em', lineHeight: 1.55, minHeight: '64px' } }, 'Each fraction condenses where the column temperature falls below its boiling point. Click a drum to inspect it.');

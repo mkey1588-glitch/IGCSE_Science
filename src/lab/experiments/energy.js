@@ -36,7 +36,7 @@ export default class Energy extends Experiment {
     this.cart.add(mesh(new THREE.BoxGeometry(0.03, 0.012, 0.026), mat('#dc2626', 0.4, 0.35), 0, 0.01, 0), mesh(new THREE.BoxGeometry(0.008, 0.012, 0.024), mat('#111827'), -0.008, 0.02, 0));
     this.cartLbl = this.lab.label(this.cart, '', { y: 0.05, cls: 'val' });
     this.buildTrack();
-    this.st = ui.steps(['Release the cart **without friction** and watch GPE ↔ KE', { t: '(S) Calculate the **speed** at the bottom of the first drop', o: ['P1.6.1.4', 'P1.6.1.5'] }, 'Turn **friction on**: where does the energy go? (Sankey)', 'Stop the cart in the brake run: **work = force × distance**', 'Haul the cart up the lift hill: **power = work ÷ time**', 'Answer the analysis questions']);
+    this.st = ui.steps(['Release the cart **without friction** and watch GPE ↔ KE', { t: '(S) Calculate the **speed** at the bottom of the first drop', o: ['P1.6.1.4', 'P1.6.1.5'], q: true }, 'Turn **friction on**: where does the energy go? (Sankey)', 'Stop the cart in the brake run: **work = force × distance**', 'Haul the cart up the lift hill: **power = work ÷ time**', 'Answer the analysis questions']);
     const sec = ui.section('Ride settings');
     ui.slider({ label: 'Lift-hill height', min: 20, max: 40, step: 5, value: this.p.h0, unit: 'm', parent: sec, onInput: (v) => { this.p.h0 = v; this.buildTrack(); } });
     ui.slider({ label: 'Cart + riders mass', min: 200, max: 600, step: 100, value: this.p.m, unit: 'kg', parent: sec, onInput: (v) => { this.p.m = v; } });

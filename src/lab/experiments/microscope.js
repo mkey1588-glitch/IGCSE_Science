@@ -5,6 +5,8 @@ import { h, clear, mulberry32, clamp, TAU } from '../../core/util.js';
 import { audio } from '../../core/audio.js';
 import { raise } from '../../core/state.js';
 
+const AIM_STEP = 4; // eyepiece pixels per arrow-key press: fine enough to land on the narrowest band (onion cytoplasm, 4 px at ×400)
+
 // Specimens: real sizes (µm) drive the magnification maths; `px` is the drawing scale at ×400.
 const SPECIMENS = {
   onion: { name: 'Onion epidermis (iodine stain)', kind: 'plant', size: '250 × 60 µm', px: 1.25, find: ['Cell wall', 'Nucleus', 'Cytoplasm', 'Vacuole'], focus: 0.52, real: 250 },
@@ -37,7 +39,7 @@ export default class Microscope extends Experiment {
     this.scenario = 'Is the fig tree alive? Every living thing is made of cells. View real specimens, find their structures and calculate how big they really are.';
     this.view = { pos: [0.02, 1.5, 0.98], target: [0, 1.1, 0] };
     this.spec = 'onion'; this.obj = 4; this.focus = 0.2; this.ox = 0; this.oy = 0;
-    this.found = {}; this.viewed = new Set();
+    this.found = {}; this.viewed = new Set(); this.practised = new Set();
   }
 
   build() {
@@ -79,11 +81,12 @@ export default class Microscope extends Experiment {
       this.lab.interactive(tag, { tip: `Slide: ${SPECIMENS[k].name}`, onClick: () => this.setSpecimen(k) });
     });
     this.lab.label(box, 'Prepared slides', { y: 0.08 });
-    // ---- eyepiece overlay
-    this.ep = h('canvas', { width: 460, height: 460, style: { width: '100%', height: '100%', borderRadius: '50%', cursor: 'crosshair', display: 'block' } });
-    this.epTitle = h('div', { style: { position: 'absolute', top: '-30px', left: 0, right: 0, textAlign: 'center', fontWeight: 700, fontSize: '13px', textShadow: '0 1px 4px #000' } });
-    this.epMag = h('div', { class: 'chip gold', style: { position: 'absolute', bottom: '8px', left: '50%', transform: 'translateX(-50%)' } });
-    this.overlay = h('div', { style: { position: 'absolute', left: 'max(24px, calc(50vw - 640px))', top: '50%', transform: 'translateY(-46%)', width: 'min(40vw, 46vh)', height: 'min(40vw, 46vh)', borderRadius: '50%', boxShadow: '0 0 0 10px #0b0f18, 0 0 0 12px rgba(255,255,255,.12), 0 30px 90px rgba(0,0,0,.7)', background: '#000', pointerEvents: 'auto' } }, this.epTitle, this.ep, this.epMag);
+    // ---- eyepiece overlay (laid out by the .eyepiece rules in styles.css, which also fit it above the panel on narrow screens)
+    this.ep = h('canvas', { width: 460, height: 460, class: 'ep-canvas' });
+    this.reticle = { x: this.ep.width / 2, y: this.ep.height / 2 }; // where the keyboard crosshair points (eyepiece pixels)
+    this.epTitle = h('div', { class: 'ep-title' });
+    this.epMag = h('div', { class: 'chip gold ep-mag' });
+    this.overlay = h('div', { class: 'eyepiece' }, this.epTitle, this.ep, this.epMag);
     this.ui.el.append(this.overlay);
     let drag = null;
     this.ep.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY, ox: this.ox, oy: this.oy, moved: 0 }; this.ep.setPointerCapture(e.pointerId); });
@@ -98,8 +101,15 @@ export default class Microscope extends Experiment {
     this.objSeg = ui.seg({ label: 'Objective lens (eyepiece ×10)', options: [[4, '×4'], [10, '×10'], [40, '×40']], value: 4, onChange: (v) => this.setObjective(+v), parent: sec });
     this.focusS = ui.slider({ label: 'Focus', min: 0, max: 1, step: 0.002, value: this.focus, fmt: (v) => (v * 100).toFixed(0), unit: '', onInput: (v) => { this.focus = v; this.updateStage(); this.draw(); this.checkFocus(); }, parent: sec });
     this.ro = ui.readouts([{ id: 'mag', label: 'Total magnification' }, { id: 'size', label: 'Real cell size' }, { id: 'sharp', label: 'Sharpness' }], sec);
-    this.findSec = ui.section('Identify structures — click them in the eyepiece');
+    this.findSec = ui.section('Identify structures — click them in the eyepiece, or use the crosshair');
     this.findList = h('div', { class: 'lp-steps' }); this.findSec.append(this.findList);
+    // Keyboard: the same identification through a crosshair. It comes straight after the Focus slider in the Tab order.
+    this.aimBtn = h('button', { type: 'button', class: 'btn small ep-aim', 'aria-describedby': 'ep-help', 'aria-keyshortcuts': 'ArrowUp ArrowDown ArrowLeft ArrowRight Enter Space', onClick: () => this.identifyAt(this.reticle.x, this.reticle.y) }, '🎯 Identify at crosshair');
+    this.aimBtn.addEventListener('keydown', (e) => this.aimKey(e));
+    this.aimBtn.addEventListener('focus', () => this.setAiming(true));
+    this.aimBtn.addEventListener('blur', () => this.setAiming(false));
+    this.epStatus = h('div', { class: 'ep-status', role: 'status', 'aria-live': 'polite' });
+    this.findSec.append(h('div', { class: 'ep-keys' }, this.aimBtn, h('div', { id: 'ep-help', class: 'muted' }, 'Arrow keys move the crosshair in the eyepiece (hold Shift to move further). Enter or Space identifies what is under it.')), this.epStatus);
     this.infoEl = h('div', { class: 'muted', style: { fontSize: '.88em', lineHeight: 1.55, marginTop: '6px' } }, 'Tip: drag inside the eyepiece to move the slide.');
     this.findSec.append(this.infoEl);
     ui.notes();
@@ -159,26 +169,70 @@ export default class Microscope extends Experiment {
     const s = SPECIMENS[this.spec], f = this.found[this.spec];
     for (const name of s.find) this.findList.append(h('div', { class: `lp-step ${f.has(name) ? 'done' : ''}` }, h('span', { class: 'ck' }, f.has(name) ? '✓' : ''), h('span', null, name)));
   }
+  /** Pointer: a click in the eyepiece identifies what is under it (and moves the keyboard crosshair there). */
   clickAt(e) {
     const r = this.ep.getBoundingClientRect(); const sc = this.ep.width / r.width;
     const x = (e.clientX - r.left) * sc, y = (e.clientY - r.top) * sc;
-    if (this.sharpness() < 0.5) { this.ui.hint('The image is blurry — focus first!', 2500); audio.fail(); return; }
+    this.reticle = { x, y };
+    this.identifyAt(x, y);
+  }
+  /** Keyboard: arrow keys move the crosshair (Shift moves further). Enter and Space reach the button's click. */
+  aimKey(e) {
+    const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+    if (!d) return;
+    e.preventDefault();
+    const step = e.shiftKey ? 8 * AIM_STEP : AIM_STEP, c = this.ep.width / 2, R = c - 12;
+    let x = this.reticle.x + d[0] * step, y = this.reticle.y + d[1] * step;
+    const off = Math.hypot(x - c, y - c);
+    if (off > R) { x = c + ((x - c) / off) * R; y = c + ((y - c) / off) * R; } // stay inside the field of view
+    this.reticle = { x, y };
+    this.draw();
+  }
+  setAiming(on) { this.aiming = on; this.overlay.classList.toggle('aiming', on); this.draw(); }
+  /** Feedback for both ways of identifying: the eyepiece label, the hint, and a status line read out by screen readers. */
+  say(text, ms = 2500) { this.epStatus.textContent = text; this.ui.hint(text, ms); }
+  /**
+   * Identify the structure at an eyepiece point: the one rule for pointer and keyboard. The image must be in
+   * focus, and only the structures on the slide that is on the stage count towards its checklist.
+   */
+  identifyAt(x, y) {
+    if (this.sharpness() < 0.5) { this.say('The image is blurry — focus first!'); audio.fail(); return null; }
     const hit = this.hitTest(x, y);
-    if (!hit) { this.ui.hint('Nothing identifiable there — try clicking right on a structure.', 2000); return; }
+    if (!hit) { this.say('Nothing identifiable there — move onto a structure and try again.', 2000); return null; }
     const s = SPECIMENS[this.spec], f = this.found[this.spec];
     this.flash = { x, y, t: 1.2, text: hit };
     this.infoEl.innerHTML = `<b>${hit}</b> — ${INFO[hit] || ''}`;
-    if (s.find.includes(hit) && !f.has(hit)) {
+    const listed = s.find.includes(hit), fresh = listed && !f.has(hit);
+    if (fresh) {
       f.add(hit); audio.discover(); this.renderFind();
       const ids = { 'Cell wall': 'B2.1.4', Nucleus: 'B2.1.4', Chloroplast: 'B2.1.4', 'Root hair': 'B8.2.1', 'Red blood cell': 'B9.4.2', Phagocyte: 'B9.4.4', Lymphocyte: 'B9.4.4', 'Circular DNA': 'B2.1.2', Plasmid: 'B2.1.2' };
       raise([ids[hit] || 'B2.1.3'], 1, 'lab');
+      this.observed();
       if (this.spec === 'onion' && f.size === s.find.length) { this.st.done(2); this.ui.note('Onion cell: wall, membrane, cytoplasm, nucleus and a large vacuole — but **no chloroplasts**.', 'gold'); }
       if (this.spec === 'blood' && f.has('Red blood cell') && (f.has('Phagocyte') || f.has('Lymphocyte'))) { this.lab.goal('blood'); this.ui.note('Red cells (no nucleus) carry oxygen; white cells (with nuclei) defend against pathogens.', 'gold'); }
       if (this.spec === 'cheek' && f.size === s.find.length) this.ui.note('Animal cell: membrane, cytoplasm, nucleus — no wall, no large vacuole, no chloroplasts.');
       if (this.spec === 'bacteria' && f.size === s.find.length) this.ui.note('Bacteria: no nucleus — DNA lies free in the cytoplasm as a loop, plus plasmids.', 'gold');
     }
+    const n = s.find.filter((x) => f.has(x)).length;
+    this.epStatus.textContent = fresh ? `✓ ${hit} identified — ${n} of ${s.find.length} on this slide.` : listed ? `${hit} — already identified on this slide.` : `${hit} — not on this slide’s checklist.`;
     this.draw();
     this.tryComplete();
+    return hit;
+  }
+  /**
+   * Practical evidence comes from what the learner observed, not from the analysis answers: identifying the
+   * structures in micrographs, comparing a plant and an animal cell, seeing specialised cells, blood cells and a bacterium.
+   */
+  observed() {
+    const all = (k) => SPECIMENS[k].find.every((x) => this.found[k]?.has(x)), has = (k, x) => !!this.found[k]?.has(x);
+    const credit = (key, ids) => { if (this.practised.has(key)) return; this.practised.add(key); raise(ids, 2, 'lab'); };
+    if (all('onion')) credit('micrograph', ['B2.1.3']);
+    if (all('onion') && all('cheek')) credit('plant-animal', ['B2.1.1']);
+    if (has('leaf', 'Chloroplast')) credit('palisade', ['B2.1.6']);
+    if (has('root', 'Root hair')) credit('root-hair', ['B2.1.6', 'B8.2.1']);
+    if (has('blood', 'Red blood cell') && (has('blood', 'Phagocyte') || has('blood', 'Lymphocyte'))) credit('blood', ['B9.4.2']);
+    if (has('blood', 'Phagocyte') && has('blood', 'Lymphocyte')) credit('white-cells', ['B9.4.4']);
+    if (all('bacteria')) credit('bacterium', ['B2.1.2']);
   }
   tryComplete() { this.st.check(); }
 
@@ -207,6 +261,18 @@ export default class Microscope extends Experiment {
     const blur = (1 - this.sharpness()) * 9;
     c.style.filter = `blur(${blur.toFixed(1)}px)`;
     if (this.flash) { ctx.fillStyle = '#ffd166'; ctx.strokeStyle = '#111'; ctx.lineWidth = 4; ctx.font = '700 20px Inter'; ctx.textAlign = 'center'; ctx.strokeText(this.flash.text, this.flash.x, this.flash.y - 16); ctx.fillText(this.flash.text, this.flash.x, this.flash.y - 16); ctx.beginPath(); ctx.arc(this.flash.x, this.flash.y, 7, 0, TAU); ctx.stroke(); ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 2; ctx.stroke(); }
+    // the keyboard crosshair, while its control has focus: dark under light so it shows on every specimen
+    if (this.aiming) {
+      const { x, y } = this.reticle;
+      ctx.lineCap = 'round';
+      for (const [col, w] of [['rgba(0,0,0,.85)', 5], ['#ffffff', 2]]) {
+        ctx.strokeStyle = col; ctx.lineWidth = w;
+        ctx.beginPath(); ctx.arc(x, y, 13, 0, TAU);
+        for (const [a, b] of [[-26, -7], [7, 26]]) { ctx.moveTo(x + a, y); ctx.lineTo(x + b, y); ctx.moveTo(x, y + a); ctx.lineTo(x, y + b); }
+        ctx.stroke();
+      }
+      ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(x, y, 1.5, 0, TAU); ctx.fill();
+    }
   }
   update(dt, t) {
     if (this.turretTarget != null) { this.turret.rotation.y += (this.turretTarget - this.turret.rotation.y) * Math.min(1, dt * 8); }
