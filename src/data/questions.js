@@ -484,6 +484,19 @@ export const QUESTIONS = RAW.map((r, i) => {
   return { ...base, ans: opts.ans, unit: opts.unit, tol: opts.tol };
 });
 
+/** FNV-1a: a short, stable fingerprint of a string. */
+function fingerprint(s) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  return (h >>> 0).toString(36);
+}
+/**
+ * A generated question's identity comes from what it asks (its sub-topic and wording, numbers included), so
+ * drawing the same question again gives the same id, in this session or a later one. Evidence is keyed by
+ * this id, so a redrawn question is never a second independent item.
+ */
+export const generatedId = (sub, q) => `gen:${sub}:${fingerprint(q)}`;
+
 const recent = [];
 /** Picks n questions for the given sub-topics, mixing static and generated items. */
 export function questionsFor(subs, n = 3, tier = 'extended') {
@@ -504,7 +517,9 @@ export function questionsFor(subs, n = 3, tier = 'extended') {
           const g = GEN[s]();
           const sup = !!g.s || isSupplement(objectivesOf({ t: s, o: g.o }));
           if (tier !== 'extended' && sup) continue;
-          out.push({ id: `gen-${s}-${Math.random()}`, t: s, gen: true, ...g, s: sup });
+          const id = generatedId(s, g.q);
+          if (out.some((q) => q.id === id)) continue; // the same question twice in one quiz
+          out.push({ id, t: s, gen: true, ...g, s: sup });
           break;
         }
       } else if (bySub[s]?.length) out.push(bySub[s].shift());

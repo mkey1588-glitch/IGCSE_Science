@@ -40,7 +40,7 @@ export default class Motion extends Experiment {
     this.sw = new Stopwatch(); this.lab.add(this.sw, -0.3, Y, 0.17);
     this.speedo = this.lab.label(kart, '0.0 m/s', { y: 0.06, cls: 'val' });
     const ui = this.ui;
-    this.st = ui.steps(['Program and run a trip with **rest, acceleration, constant speed and braking**', 'Find the **speed** from the gradient of the distance–time graph', 'Find the **distance** from the area under the speed–time graph', { t: '(S) Find the **acceleration** from the gradient of the speed–time graph', o: ['P1.2.11'] }, 'Answer the analysis questions']);
+    this.st = ui.steps(['Program and run a trip with **rest, acceleration, constant speed and braking**', { t: 'Find the **speed** from the gradient of the distance–time graph', q: true }, { t: 'Find the **distance** from the area under the speed–time graph', q: true }, { t: '(S) Find the **acceleration** from the gradient of the speed–time graph', o: ['P1.2.11'], q: true }, 'Answer the analysis questions']);
     const sec = ui.section('Kart program');
     const sl = (k, label, min, max, step, unit) => ui.slider({ label, min, max, step, value: this.p[k], unit, parent: sec, onInput: (v) => { this.p[k] = v; } });
     sl('rest', '1 · Wait at the start', 0, 4, 1, 's'); sl('a', '2 · Acceleration', 0.5, 4, 0.5, 'm/s²'); sl('ta', '2 · …for', 1, 6, 1, 's'); sl('cruise', '3 · Constant speed for', 0, 10, 1, 's'); sl('b', '4 · Braking deceleration', 1, 8, 1, 'm/s²');
@@ -49,24 +49,39 @@ export default class Motion extends Experiment {
     this.gd = ui.graph({ x: { label: 'Time / s', min: 0, max: 20 }, y: { label: 'Distance / m', min: 0, max: 100 }, series: [{ name: 'd', color: '#38bdf8', line: true, points: false }], auto: true, height: 150 }, ui.section('Distance–time graph'));
     this.gv = ui.graph({ x: { label: 'Time / s', min: 0, max: 20 }, y: { label: 'Speed / m/s', min: 0, max: 12 }, series: [{ name: 'v', color: '#f472b6', line: true, points: false }], auto: true, height: 150 }, ui.section('Speed–time graph'));
     ui.notes();
+    // Each answer is read from the current run's graphs: it needs a finished run that did not crash and, for a
+    // gradient, the section it is measured on. A new run moves earlier answers to a history line (ui.newTrial).
+    const from = (segment, value) => () => (this.result && (!segment || this.result[segment] > 0) ? value(this.result) : null);
     this.qs = ui.questions([
-      { q: 'Use your **distance–time** graph: what was the speed during the constant-speed section? (gradient = distance ÷ time)', ans: () => this.result?.v ?? null, tol: 0.04, abs: 0.05, unit: 'm/s', e: 'Gradient of the straight section = {ans} m/s.', o: [6] },
-      { q: 'Use the **area under the speed–time** graph to find the total distance travelled.', ans: () => this.result?.total ?? null, tol: 0.04, abs: 0.3, unit: 'm', e: 'Triangle + rectangle + triangle = {ans} m.', o: [7] },
-      { q: '(S) Use the **gradient of the speed–time** graph to find the acceleration.', ans: () => this.result?.a ?? null, tol: 0.03, abs: 0.05, unit: 'm/s²', e: 'a = Δv ÷ Δt = {ans} m/s².', o: [9, 11] },
-      { q: 'What was the **average speed** for the whole trip (including the wait)?', ans: () => (this.result ? this.result.total / this.result.T : null), tol: 0.05, abs: 0.05, unit: 'm/s', e: 'Average speed = total distance ÷ total time = {ans} m/s.', o: [2] },
+      { q: 'Use your **distance–time** graph: what was the speed during the constant-speed section? (gradient = distance ÷ time)', ans: from('cruise', (r) => r.v), unavailable: () => this.whyNot('cruise'), tol: 0.04, abs: 0.05, unit: 'm/s', e: 'Gradient of the straight section = {ans} m/s.', o: [6] },
+      { q: 'Use the **area under the speed–time** graph to find the total distance travelled.', ans: from(null, (r) => r.total), unavailable: () => this.whyNot(), tol: 0.04, abs: 0.3, unit: 'm', e: 'Triangle + rectangle + triangle = {ans} m.', o: [7] },
+      { q: '(S) Use the **gradient of the speed–time** graph to find the acceleration.', ans: from('ta', (r) => r.a), unavailable: () => this.whyNot('ta'), tol: 0.03, abs: 0.05, unit: 'm/s²', e: 'a = Δv ÷ Δt = {ans} m/s².', o: [9, 11] },
+      { q: 'What was the **average speed** for the whole trip (including the wait)?', ans: from(null, (r) => r.total / r.T), unavailable: () => this.whyNot(), tol: 0.05, abs: 0.05, unit: 'm/s', e: 'Average speed = total distance ÷ total time = {ans} m/s.', o: [2] },
       { q: 'On a distance–time graph, a **horizontal** line means the kart is…', opts: ['at rest', 'moving at constant speed', 'accelerating', 'decelerating'], e: 'Distance is not changing.', o: [5] },
       { q: '(S) Braking at 4 m/s² can be written as an acceleration of…', opts: ['−4 m/s² (deceleration is negative acceleration)', '+4 m/s²', '0 m/s²', '4 m/s'], e: 'The velocity is decreasing.', o: [12] },
     ], { sub: 'P1.2', onDone: () => { this.st.done(4); this.checkTab('track', this.st, 5); } });
     this.every((dt) => this.simTrack(dt));
   }
   toStart() { this.run = null; this.kart.position.x = X0; this.sw.set(0); this.speedo.userData.set('0.0 m/s'); }
+  /** Why the current run cannot answer a question (or one that needs `segment`), for the question's feedback. */
+  whyNot(segment) {
+    const r = this.run;
+    if (!r) return 'Run the kart program first, then read your graphs.';
+    if (!r.done) return 'The kart is still running — wait for this run to finish.';
+    if (r.crashed) return '💥 This run crashed into the barrier, so it cannot be analysed. Change the program and run it again.';
+    if (segment === 'cruise' && !(r.cruise > 0)) return 'This run has **no constant-speed section**, so its distance–time graph has no straight section to measure. Give the kart a constant-speed time and run it again.';
+    return 'Collect your data first.';
+  }
   start() {
     const p = this.p, v = p.a * p.ta, tb = v / p.b;
     const T = p.rest + p.ta + p.cruise + tb;
     const total = 0.5 * p.a * p.ta * p.ta + v * p.cruise + 0.5 * v * tb;
-    this.run = { t: 0, ...p, v, tb, T, total, crashed: false };
-    // the questions are scored against the run on the graphs: none until this run finishes without crashing
+    this.runNo = (this.runNo || 0) + 1;
+    this.run = { t: 0, ...p, v, tb, T, total, crashed: false, n: this.runNo };
+    // the questions are scored against the run on the graphs: none until this run finishes without crashing,
+    // and answers read from the previous run's graphs are shown as that run's history
     this.result = null;
+    this.ui.newTrial(`Run ${this.runNo}`);
     this.gd.clear(); this.gv.clear(); this.gd.o.x.max = Math.max(20, T + 1); this.gv.o.x.max = Math.max(20, T + 1); this.gv.o.y.max = Math.max(12, v + 1);
     this.kart.position.x = X0; audio.click(); this._sample = 0;
   }
@@ -93,7 +108,7 @@ export default class Motion extends Experiment {
     this._sample += dt; if (this._sample > 0.1 || r.t >= r.T) { this._sample = 0; this.gd.add(0, +r.t.toFixed(2), +d.toFixed(2)); this.gv.add(0, +r.t.toFixed(2), +v.toFixed(2)); }
     if (r.t >= r.T || r.crashed) {
       r.done = true;
-      if (!r.crashed) { this.result = { v: r.v, total: r.total, a: r.a, T: r.T }; this.ui.note(`Trip complete: top speed ${r.v.toFixed(1)} m/s, total distance ${r.total.toFixed(1)} m in ${r.T.toFixed(1)} s. Read your graphs to answer the questions.`, 'gold'); if (r.rest > 0 && r.cruise > 0) this.st.done(0); else this.ui.note('Include a wait at the start and a constant-speed section to see all four graph shapes.', 'warn'); }
+      if (!r.crashed) { this.result = { v: r.v, total: r.total, a: r.a, T: r.T, ta: r.ta, cruise: r.cruise, rest: r.rest, run: r.n }; this.ui.note(`Run ${r.n} complete: top speed ${r.v.toFixed(1)} m/s, total distance ${r.total.toFixed(1)} m in ${r.T.toFixed(1)} s. Read your graphs to answer the questions.`, 'gold'); if (r.rest > 0 && r.cruise > 0) this.st.done(0); else this.ui.note(`Include a wait at the start and a constant-speed section to see all four graph shapes.${r.cruise > 0 ? '' : ' Without a constant-speed section there is no straight part of the distance–time graph to measure.'}`, 'warn'); }
     }
   }
   update(dt, t) {
@@ -120,7 +135,7 @@ export default class Motion extends Experiment {
     this.ball = mesh(new THREE.SphereGeometry(0.012, 16, 12), mat('#f97316', 0.2, 0.4), 0, 1.07, 0); lg.add(this.ball);
     this.lab.label(lg, 'Light gates 1.00 m apart', { y: 1.2 });
     const ui = this.ui;
-    this.st2 = ui.steps(['Time **one swing** three times', 'Time **ten swings** three times and compare the spread', 'Measure the period for **three different lengths**', { t: '(S) Measure **g** by timing a falling ball', o: ['P1.2.13'] }, { t: '(S) Sort the quantities into **scalars and vectors**', o: ['P1.1.4', 'P1.1.5', 'P1.1.6'] }, 'Answer the analysis questions']);
+    this.st2 = ui.steps(['Time **one swing** three times', 'Time **ten swings** three times at the **same length** and compare the spread','Measure the period for **three different lengths**', { t: '(S) Measure **g** by timing a falling ball', o: ['P1.2.13'] }, { t: '(S) Sort the quantities into **scalars and vectors**', o: ['P1.1.4', 'P1.1.5', 'P1.1.6'] }, 'Answer the analysis questions']);
     const sec = ui.section('Pendulum');
     // a timing keeps the length it started with; the length is locked until it is recorded
     this.lenS = ui.slider({ label: 'String length (measured with a metre rule)', min: 0.2, max: 1.0, step: 0.1, value: this.tm.L, unit: 'm', parent: sec, onInput: (v) => { this.tm.L = v; this.tm.t = 0; } });
@@ -168,17 +183,7 @@ export default class Motion extends Experiment {
         tm.trials.push({ L: tg.L, n: tg.n, time: tg.measured, per });
         this.ttab.add([tg.L.toFixed(1), tg.n, tg.measured.toFixed(2), `<b>${per.toFixed(2)}</b>`]);
         audio.blip();
-        // repeats are only compared under matching conditions: three timings at one length
-        const atOneLength = (n) => { const by = {}; for (const x of tm.trials) if (x.n === n) (by[x.L.toFixed(1)] ||= []).push(x); return Object.values(by).find((g) => g.length >= 3) || null; };
-        const ones = atOneLength(1), tens = atOneLength(10);
-        if (ones) this.st2.done(0);
-        if (tens && !this.st2.isDone(1)) {
-          this.st2.done(1);
-          const spread = (arr) => Math.max(...arr.map((x) => x.per)) - Math.min(...arr.map((x) => x.per));
-          const onesHere = tm.trials.filter((x) => x.n === 1 && x.L === tens[0].L);
-          if (onesHere.length >= 3) this.ui.note(`Spread of periods at ${tens[0].L.toFixed(1)} m — single swings: **${spread(onesHere).toFixed(2)} s**; ten swings: **${spread(tens).toFixed(2)} s**. Timing multiples is far more precise.`, 'gold');
-          else this.ui.note(`Ten-swing periods at ${tens[0].L.toFixed(1)} m agree within **${spread(tens).toFixed(2)} s**. Time single swings at this length too to compare the spread.`, 'gold');
-        }
+        this.compareSpread(tg);
         if (tg.n === 10) { tm.lengths.add(tg.L.toFixed(1)); this.gT.add(0, tg.L, per); }
         if (tm.lengths.size >= 3 && !this.st2.isDone(2)) { this.st2.done(2); this.ui.note('Longer pendulums swing more slowly — the period increases with length (but not in direct proportion).', 'gold'); }
         this.checkTab('timing', this.st2, 6);
@@ -188,6 +193,32 @@ export default class Motion extends Experiment {
       const d = this._drop; d.t += dt * 0.5; const y = 1.07 - 0.5 * 9.81 * d.t * d.t;
       this.ball.position.y = Math.max(0.03, y);
       if (y <= 0.05) { this._drop = null; this.ffro.set('t', d.meas.toFixed(3)); tm.g = 2 / (d.meas * d.meas); audio.clink(); this.ui.note(`Timer: **${d.meas.toFixed(3)} s** for 1.00 m. Now calculate g.`); this.st2.done(3); this.checkTab('timing', this.st2, 6); }
+    }
+  }
+  /**
+   * Repeats are grouped by length, and the spread of single-swing and ten-swing periods is compared only between
+   * groups timed at the same length. Timings at other lengths stay in the table and on the graph.
+   */
+  compareSpread(tg) {
+    const tm = this.tm, L = (x) => x.L.toFixed(1);
+    const groups = (n) => { const by = {}; for (const x of tm.trials) if (x.n === n) (by[L(x)] ||= []).push(x); return by; };
+    const ones = groups(1), tens = groups(10);
+    const three = (by) => Object.keys(by).filter((k) => by[k].length >= 3);
+    const ones3 = three(ones), tens3 = three(tens);
+    const spread = (arr) => Math.max(...arr.map((x) => x.per)) - Math.min(...arr.map((x) => x.per));
+    const once = (key, text) => { tm.noted ||= new Set(); if (!tm.noted.has(key)) { tm.noted.add(key); this.ui.note(text, 'gold'); } };
+    if (ones3.length) this.st2.done(0);
+    if (this.st2.isDone(1)) return;
+    const at = tens3.find((k) => ones3.includes(k));
+    if (at) {
+      this.st2.done(1);
+      this.ui.note(`Spread of periods at ${at} m — single swings: **${spread(ones[at]).toFixed(2)} s**; ten swings: **${spread(tens[at]).toFixed(2)} s**. Timing multiples is far more precise.`, 'gold');
+    } else if (ones3.length && tens3.length) {
+      once(`apart:${ones3}|${tens3}`, `Your single swings were timed at ${ones3.join(', ')} m and your ten-swing runs at ${tens3.join(', ')} m. To compare their spread, time both at the **same length**.`);
+    } else if (tg.n === 10 && tens3.includes(L(tg))) {
+      once(`tens:${L(tg)}`, `Ten-swing periods at ${L(tg)} m agree within **${spread(tens[L(tg)]).toFixed(2)} s**. Time three single swings at the **same length** to compare the spread.`);
+    } else if (tg.n === 1 && ones3.includes(L(tg))) {
+      once(`ones:${L(tg)}`, `Single-swing periods at ${L(tg)} m vary by **${spread(ones[L(tg)]).toFixed(2)} s**. Time ten swings three times at the **same length** to compare the spread.`);
     }
   }
   drop() { if (this._drop) return; this.ball.position.y = 1.07; this._drop = { t: 0, meas: Math.sqrt(2 / 9.81) * (1 + (Math.random() - 0.5) * 0.01) }; audio.whoosh?.(); }

@@ -142,7 +142,7 @@ export default class Optics extends Experiment {
     semi.push(v2(-0.1, 0)); this.semiPoly = semi;
     this.glass = null;
     const ui = this.ui;
-    this.stR = ui.steps(['Measure **angles of incidence and refraction** for a glass block (three angles)', { t: '(S) Calculate the **refractive index** n = sin i ÷ sin r', o: ['P3.2.2.5'] }, { t: '(S) Use the semicircular block to find the **critical angle** and see **total internal reflection**', o: ['P3.2.2.6', 'P3.2.2.7'] }, 'Answer the analysis questions']);
+    this.stR = ui.steps(['Measure **angles of incidence and refraction** for a glass block (three angles)', { t: '(S) Calculate the **refractive index** n = sin i ÷ sin r', o: ['P3.2.2.5'], q: true }, { t: '(S) Use the semicircular block to find the **critical angle** and see **total internal reflection**', o: ['P3.2.2.6', 'P3.2.2.7'] }, 'Answer the analysis questions']);
     const sec = ui.section('Set-up');
     ui.seg({ label: 'Glass block', options: [['rect', 'Rectangular'], ['semi', 'Semicircular (S)']], value: 'rect', parent: sec, onChange: (v) => { this.rr.shape = v; this.drawRefract(); } });
     ui.slider({ label: 'Angle of incidence', min: 0, max: 80, step: 1, value: this.rr.i, unit: '°', parent: sec, onInput: (v) => { this.rr.i = v; this.drawRefract(); } });

@@ -125,7 +125,7 @@ export default class Radioactivity extends Experiment {
     this.nuc.instanceMatrix.needsUpdate = true; this.nuc.instanceColor.needsUpdate = true;
     this.lab.label(tray, 'Sample of 400 unstable nuclei (green = undecayed)', { y: 0.05 });
     const ui = this.ui;
-    this.stL = ui.steps(['Start the decay and watch it happen **randomly**', 'Read the **half-life** from your graph', { t: '(S) Complete a **decay equation**', o: ['P5.2.3.4'] }, 'Answer the analysis questions']);
+    this.stL = ui.steps(['Start the decay and watch it happen **randomly**', { t: 'Read the **half-life** from your graph', q: true }, { t: '(S) Complete a **decay equation**', o: ['P5.2.3.4'] }, 'Answer the analysis questions']);
     const sec = ui.section('Decay');
     ui.buttons([{ label: '▶ Start', kind: 'primary', onClick: () => this.startDecay() }, { label: '⟲ Fresh sample', onClick: () => this.resetDecay() }], sec);
     this.roL = ui.readouts([{ id: 't', label: 'Time', unit: 's' }, { id: 'N', label: 'Undecayed nuclei' }], sec);

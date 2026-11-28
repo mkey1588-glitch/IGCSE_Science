@@ -16,6 +16,7 @@ export class Experiment {
     this.tabRoot = null; this.tab = null;
     this.updaters = [];
     this.ui.stepsTarget = () => this.complete();
+    this.ui.tab = null;
   }
   /** Register per-frame callbacks that are cleared on tab switch. */
   every(fn) { this.updaters.push(fn); return fn; }
@@ -29,6 +30,7 @@ export class Experiment {
     this.tabRoot = new THREE.Group(); this.root.add(this.tabRoot);
     this.lab.tabRoot = this.tabRoot;
     this.ui.reset();
+    this.ui.tab = id;
     this.ui.stepsTarget = () => this.done(id);
     const fn = this[`tab_${id}`];
     if (fn) fn.call(this);

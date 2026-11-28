@@ -75,14 +75,153 @@ describe('Motion Lab timing bench: each pendulum timing keeps its length', () =>
     expect(+r[1][3]).toBeCloseTo(2.0, 1);
   });
 
-  it('repeats are compared only under matching conditions', async () => {
+  const swings = (ctx, el) => async (n, L) => { setSlider(el, 'String length', L); clickButton(el, `Time ${n} swing`); await ctx.advance(n * 2 * Math.PI * Math.sqrt(L / 9.81) + 0.5); };
+  const notes = (el) => [...el.querySelectorAll('.note')].map((n) => n.textContent).join('\n');
+
+  it('repeats are only grouped under matching conditions', async () => {
     seedRandom(9);
     const { ctx, el } = await timing();
-    const time10 = async (L) => { setSlider(el, 'String length', L); clickButton(el, 'Time 10 swings'); await ctx.advance(10 * 2 * Math.PI * Math.sqrt(L / 9.81) + 0.5); };
-    await time10(0.2); await time10(0.2); await time10(1.0);
-    expect(stepStates(el)[1]).toBe(false); // three timings, but not three at one length
-    await time10(0.2);
+    const time = swings(ctx, el);
+    await time(10, 0.2); await time(10, 0.2); await time(10, 1.0);
+    await time(1, 0.2); await time(1, 0.2); await time(1, 1.0);
+    expect(stepStates(el).slice(0, 2)).toEqual([false, false]); // three timings of each kind, but not three at one length
+    await time(1, 0.2);
+    expect(stepStates(el)[0]).toBe(true);
+  });
+
+  it('single swings at 0.2 m and ten-swing runs at 1.0 m are recorded, but cannot satisfy the spread comparison', async () => {
+    seedRandom(19);
+    const { ctx, el } = await timing();
+    const time = swings(ctx, el);
+    for (let i = 0; i < 3; i++) await time(1, 0.2);
+    for (let i = 0; i < 3; i++) await time(10, 1.0);
+    expect(rows(el, 'Pendulum').map((r) => [r[0], r[1]])).toEqual([['0.2', '1'], ['0.2', '1'], ['0.2', '1'], ['1.0', '10'], ['1.0', '10'], ['1.0', '10']]);
+    expect(stepStates(el)[0]).toBe(true); // three single swings at one length
+    expect(stepStates(el)[1]).toBe(false); // the comparison needs both groups at the same length
+    expect(notes(el)).toMatch(/same length/i);
+    expect(notes(el)).not.toMatch(/Spread of periods/);
+  });
+
+  it('matching groups at one length satisfy the spread comparison', async () => {
+    seedRandom(23);
+    const { ctx, el } = await timing();
+    const time = swings(ctx, el);
+    for (let i = 0; i < 3; i++) await time(10, 1.0);
+    expect(stepStates(el)[1]).toBe(false); // ten-swing repeats alone are not a comparison
+    for (let i = 0; i < 3; i++) await time(1, 1.0);
+    expect(stepStates(el).slice(0, 2)).toEqual([true, true]);
+    expect(notes(el)).toMatch(/Spread of periods at 1\.0 m/);
+  });
+});
+
+describe('Pondweed Lab: comparisons only use counts made under matching conditions', () => {
+  async function pondweed(seed) {
+    seedRandom(seed);
+    const ctx = await freshGame();
+    await ctx.game.lab.open('photosynthesis');
+    const el = ctx.game.lab.ui.el;
+    const count = async (d, co2, T = 25) => {
+      setSlider(el, 'Lamp distance', d); choose(el, 'CO₂ (sodium hydrogencarbonate)', co2); setSlider(el, 'Water temperature', T);
+      clickButton(el, 'Count bubbles'); await ctx.advance(5.5);
+    };
+    return { ctx, el, count };
+  }
+  const notes = (el) => [...el.querySelectorAll('.note')].map((n) => n.textContent).join('\n');
+
+  it('10 cm Medium CO₂ then 12 cm High CO₂ earns no CO₂ comparison: the lamp distance changed too', async () => {
+    const { el, count } = await pondweed(31);
+    await count(10, 'Medium'); await count(12, 'High');
+    expect(rows(el, 'Results').map((r) => r.slice(0, 4))).toEqual([['10', '1.000', 'medium', '25'], ['12', '0.694', 'high', '25']]);
+    expect(stepStates(el)[2]).toBe(false);
+    expect(notes(el)).toMatch(/same lamp distance and temperature/i);
+  });
+
+  it('a pair at different temperatures earns no CO₂ comparison either', async () => {
+    const { el, count } = await pondweed(32);
+    await count(10, 'Medium', 25); await count(10, 'High', 35);
+    expect(stepStates(el)[2]).toBe(false);
+  });
+
+  it('a pair with the same distance and temperature and different CO₂ earns it', async () => {
+    const { el, count } = await pondweed(33);
+    await count(10, 'Medium'); await count(12, 'High');
+    await count(10, 'High');
+    expect(stepStates(el)[2]).toBe(true);
+  });
+
+  it('lamp distances are compared at one CO₂ level, at the graph temperature', async () => {
+    const { el, count } = await pondweed(34);
+    await count(10, 'Medium'); await count(20, 'High'); await count(30, 'Medium'); await count(40, 'Low');
+    expect(stepStates(el)[1]).toBe(false); // four distances, but at three CO₂ levels
+    await count(20, 'Medium'); await count(40, 'Medium');
     expect(stepStates(el)[1]).toBe(true);
+  });
+});
+
+describe('Motion Lab track: segment answers need that segment in the current, successful run', () => {
+  async function track(seed) {
+    seedRandom(seed);
+    const ctx = await freshGame();
+    await ctx.game.lab.open('motion', { tab: 'track' });
+    const el = ctx.game.lab.ui.el;
+    const box = () => [...el.querySelectorAll('.aq')].find((b) => b.textContent.includes('constant-speed section'));
+    const run = async (p, seconds) => {
+      for (const [label, v] of Object.entries(p)) setSlider(el, label, v);
+      clickButton(el, 'Run program');
+      await ctx.advance(seconds);
+    };
+    return { ctx, el, box, run };
+  }
+  const VALID = { '2 · Acceleration': 2, '2 · …for': 4, '3 · Constant speed for': 6 }; // 8 m/s cruise, 72 m
+  const CRASH = { '2 · Acceleration': 4, '2 · …for': 6, '3 · Constant speed for': 10 }; // 24 m/s: hits the barrier
+
+  it('a run with no constant-speed section cannot earn the straight-section gradient; a cruise run can', async () => {
+    const { ctx, el, box, run } = await track(41);
+    await run({ ...VALID, '3 · Constant speed for': 0 }, 14);
+    expect(ctx.game.lab.active.result).toMatchObject({ v: 8 }); // the run finished, peaking at 8 m/s
+    answer(el, [['constant-speed section', 8]]);
+    expect(box().classList.contains('solved')).toBe(false);
+    expect(box().querySelector('.fb').textContent).toMatch(/no constant-speed section/i);
+    expect(stepStates(el)[1]).toBe(false);
+    expect(ctx.state.evidence['P1.2.6']?.c?.length || 0).toBe(0);
+    await run(VALID, 20);
+    answer(el, [['constant-speed section', 8]]);
+    expect(box().classList.contains('solved')).toBe(true);
+    await ctx.advance(0.1);
+    expect(stepStates(el)[1]).toBe(true);
+  });
+
+  it('after a failed run, an earlier correct answer is shown as history, the new run cannot reuse it, and progress is kept', async () => {
+    const { ctx, el, box, run } = await track(42);
+    await run(VALID, 20);
+    answer(el, [['constant-speed section', 8]]);
+    await ctx.advance(0.1);
+    expect(box().classList.contains('solved')).toBe(true);
+    expect(stepStates(el)[1]).toBe(true);
+    const evidence = JSON.stringify(ctx.state.evidence);
+    await run(CRASH, 0.2); // a new run has started
+    expect(box().classList.contains('solved')).toBe(false); // not shown as answered for this run
+    expect(box().querySelector('.fb').textContent).toBe('');
+    expect(box().querySelector('.aq-hist').textContent).toMatch(/run 1/i);
+    expect(box().querySelector('input').value).toBe('');
+    await ctx.advance(25); // … and it hits the barrier
+    answer(el, [['constant-speed section', 8]]);
+    expect(box().classList.contains('solved')).toBe(false);
+    expect(box().querySelector('.fb').textContent).toMatch(/crash/i);
+    expect(stepStates(el)[1]).toBe(true); // earlier progress is kept
+    expect(JSON.stringify(ctx.state.evidence)).toBe(evidence); // and nothing new is credited
+  });
+
+  it('after a failed run, an unanswered question cannot be scored against the earlier run', async () => {
+    const { ctx, el, box, run } = await track(43);
+    await run(VALID, 20);
+    await run(CRASH, 25);
+    expect(box().querySelector('.aq-hist')?.textContent || '').toBe('');
+    answer(el, [['constant-speed section', 8]]);
+    expect(box().classList.contains('solved')).toBe(false);
+    expect(box().querySelector('.fb').textContent).toMatch(/crash/i);
+    expect(stepStates(el)[1]).toBe(false);
+    expect(ctx.state.evidence['P1.2.6']?.c?.length || 0).toBe(0);
   });
 });
 
@@ -101,7 +240,7 @@ describe('Motion Lab track: questions are scored against the run on the graphs',
     answer(el, [['constant-speed section', 8]]);
     const box = [...el.querySelectorAll('.aq')].find((b) => b.textContent.includes('constant-speed section'));
     expect(box.classList.contains('solved')).toBe(false);
-    expect(box.querySelector('.fb').textContent).toMatch(/data/i);
+    expect(box.querySelector('.fb').textContent).toMatch(/crashed .* cannot be analysed/i);
     // a new valid run can be scored
     setSlider(el, '2 · Acceleration', 1); setSlider(el, '2 · …for', 4); setSlider(el, '3 · Constant speed for', 6);
     clickButton(el, 'Run program');

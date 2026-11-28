@@ -161,7 +161,7 @@ export default class Density extends Experiment {
     this.lab.label(tray, 'Sand tray', { y: 0.12, x: -0.15, cls: 'dimlab' });
     this.tray = tray;
     const ui = this.ui;
-    this.stP = ui.steps(['Stand the brick on **all three faces**', 'Double the **force** on one face', 'Calculate a **pressure** (p = F ÷ A)', 'Answer the analysis questions']);
+    this.stP = ui.steps(['Stand the brick on **all three faces**', 'Double the **force** on one face', { t: 'Calculate a **pressure** (p = F ÷ A)', q: true }, 'Answer the analysis questions']);
     const sec = ui.section('Brick on sand');
     ui.seg({ label: 'Face in contact', options: FACES.map((f) => [f.id, f.name]), value: 'big', parent: sec, onChange: (v) => { this.pr.face = v; this.setBrick(); } });
     ui.seg({ label: 'Force (brick + extra weights)', options: [[20, '20 N'], [40, '40 N'], [60, '60 N']], value: 20, parent: sec, onChange: (v) => { this.pr.F = +v; this.setBrick(); } });

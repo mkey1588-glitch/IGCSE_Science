@@ -35,7 +35,7 @@ export default class Chromatography extends Experiment {
     this.rl = ruler(0.3); this.lab.add(this.rl, 0.26, Y + 0.002, 0.08); this.rl.rotation.y = Math.PI / 2;
     this.lab.interactive(this.paper, { tip: 'Chromatography paper', onClick: () => {} });
     const ui = this.ui;
-    this.st = ui.steps(['Draw the baseline in **pencil** and spot each ink on it', 'Set the solvent level **below** the baseline', 'Run the chromatogram until the solvent front nears the top', 'Mark the **solvent front** and measure the spots', { t: '(S) Calculate the **Rf** of the purple dye', o: ['C12.3.3'] }, 'Name the pen that signed the forged ticket', 'Answer the analysis questions']);
+    this.st = ui.steps(['Draw the baseline in **pencil** and spot each ink on it', 'Set the solvent level **below** the baseline', 'Run the chromatogram until the solvent front nears the top', 'Mark the **solvent front** and measure the spots', { t: '(S) Calculate the **Rf** of the purple dye', o: ['C12.3.3'], q: true }, 'Name the pen that signed the forged ticket', 'Answer the analysis questions']);
     const sec = ui.section('Set up');
     this.penSeg = ui.seg({ label: 'Draw the baseline with', options: [['pencil', '✏️ Pencil'], ['ink', '🖊️ Ballpoint pen']], value: 'pencil', parent: sec, onChange: (v) => { this.pencil = v === 'pencil'; this.draw(); } });
     this.lvlSeg = ui.seg({ label: 'Solvent depth', options: [['below', 'Below the baseline'], ['above', 'Above the baseline']], value: 'below', parent: sec, onChange: (v) => { this.solventLevel = v; this.tank.setLevel(v === 'below' ? 0.06 : 0.16); } });
